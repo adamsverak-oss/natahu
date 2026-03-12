@@ -56,6 +56,14 @@ export type ChatMessage = {
   createdAt: string;
 };
 
+export type PhotoPost = {
+  id: string;
+  imageUrl: string;
+  caption?: string;
+  authorId: string;
+  createdAt: string;
+};
+
 export type AppData = {
   members: Member[];
   tasks: Task[];
@@ -63,4 +71,5 @@ export type AppData = {
   taskHistory: TaskHistoryItem[];
   householdNotes: HouseholdNote[];
   chatMessages: ChatMessage[];
+  photoPosts: PhotoPost[];
 };

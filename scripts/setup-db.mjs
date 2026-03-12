@@ -122,6 +122,16 @@ await sql.begin(async (tx) => {
     )
   `;
 
+  await tx`
+    create table if not exists photo_posts (
+      id uuid primary key default gen_random_uuid(),
+      image_url text not null,
+      caption text,
+      author_id text not null references users(id) on delete cascade,
+      created_at timestamptz not null default now()
+    )
+  `;
+
   for (const user of users) {
     await tx`
       insert into users (id, name, username, password_hash, color, avatar, can_manage)

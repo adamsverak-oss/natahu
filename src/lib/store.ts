@@ -3,6 +3,7 @@ import type {
   AppData,
   ChatMessage,
   HouseholdNote,
+  PhotoPost,
   ShoppingItem,
   Task,
   TaskHistoryItem,
@@ -56,6 +57,14 @@ type DbChatMessage = {
   createdAt: string;
 };
 
+type DbPhotoPost = {
+  id: string;
+  imageUrl: string;
+  caption: string | null;
+  authorId: string;
+  createdAt: string;
+};
+
 function currentMonthStartIso() {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
@@ -96,6 +105,13 @@ function mapHouseholdNote(item: DbHouseholdNote): HouseholdNote {
 
 function mapChatMessage(item: DbChatMessage): ChatMessage {
   return item;
+}
+
+function mapPhotoPost(item: DbPhotoPost): PhotoPost {
+  return {
+    ...item,
+    caption: item.caption ?? undefined,
+  };
 }
 
 export async function cleanupOldCompletedTasks() {
@@ -195,6 +211,18 @@ export async function readAppData(): Promise<AppData> {
     limit 100
   `;
 
+  const photoPosts = await sql<DbPhotoPost[]>`
+    select
+      id,
+      image_url as "imageUrl",
+      caption,
+      author_id as "authorId",
+      created_at::text as "createdAt"
+    from photo_posts
+    order by created_at desc
+    limit 36
+  `;
+
   return {
     members,
     tasks: tasks.map(mapTask),
@@ -202,5 +230,6 @@ export async function readAppData(): Promise<AppData> {
     taskHistory: taskHistory.map(mapHistoryItem),
     householdNotes: householdNotes.map(mapHouseholdNote),
     chatMessages: chatMessages.map(mapChatMessage),
+    photoPosts: photoPosts.map(mapPhotoPost),
   };
 }

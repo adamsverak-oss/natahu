@@ -1,11 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
 import type {
   AppData,
   ChatMessage,
   HouseholdNote,
+  PhotoPost,
   ShoppingItem,
   Task,
   TaskHistoryItem,
@@ -22,6 +23,8 @@ type SectionId =
   | "mine"
   | "reminders"
   | "notes"
+  | "photos"
+  | "wheel"
   | "chat"
   | "admin";
 
@@ -47,6 +50,7 @@ const emptyData: AppData = {
   taskHistory: [],
   householdNotes: [],
   chatMessages: [],
+  photoPosts: [],
 };
 
 const priorityLabels: Record<Priority, string> = {
@@ -120,6 +124,16 @@ function getPriorityClass(priority?: Priority) {
   return styles.priorityMedium;
 }
 
+function getTaskPoints(priority?: Priority) {
+  if (priority === "high") return 5;
+  if (priority === "low") return 2;
+  return 3;
+}
+
+function getLevel(points: number) {
+  return Math.max(1, Math.floor(points / 12) + 1);
+}
+
 export default function HomePage() {
   const [data, setData] = useState<AppData>(emptyData);
   const [activeUser, setActiveUser] = useState<SessionUser | null>(null);
@@ -170,7 +184,12 @@ export default function HomePage() {
   const [memberAvatar, setMemberAvatar] = useState("AD");
 
   const [noteBody, setNoteBody] = useState("");
+  const [photoCaption, setPhotoCaption] = useState("");
+  const [photoDataUrl, setPhotoDataUrl] = useState("");
+  const [photoError, setPhotoError] = useState("");
   const [chatBody, setChatBody] = useState("");
+  const [wheelResult, setWheelResult] = useState<CalendarTaskView | Task | null>(null);
+  const [isSpinningWheel, setIsSpinningWheel] = useState(false);
 
   const canManage = activeUser?.canManage ?? false;
   const canOpenAdmin = activeUser?.id === "adam";
@@ -184,6 +203,8 @@ export default function HomePage() {
     { id: "mine" as const, label: "Moje ukoly", hint: "Jen moje veci" },
     { id: "reminders" as const, label: "Pripominky", hint: "Co hori a co se blizi" },
     { id: "notes" as const, label: "Domov", hint: "Poznamky pro domacnost" },
+    { id: "photos" as const, label: "Fotky", hint: "Rodinna nastenka" },
+    { id: "wheel" as const, label: "Kolo", hint: "Nahodny ukol" },
     { id: "chat" as const, label: "Chat", hint: "Rodinna komunikace" },
     ...(canOpenAdmin ? [{ id: "admin" as const, label: "Admin", hint: "Hesla a profily" }] : []),
   ];
@@ -387,15 +408,52 @@ export default function HomePage() {
     };
   }, [activeUser?.id, data.tasks, todayKey]);
 
-  const leaderboard = useMemo(
-    () =>
-      [...data.members]
-        .map((member) => ({
+  const leaderboard = useMemo(() => {
+    const monthKey = getCurrentMonthKey();
+
+    return [...data.members]
+      .map((member) => {
+        const history = data.taskHistory.filter((item) => item.assigneeId === member.id);
+        const monthlyHistory = history.filter((item) => item.completedAt.startsWith(monthKey));
+        const points = monthlyHistory.reduce((sum, item) => sum + getTaskPoints(item.priority), 0);
+        const level = getLevel(points);
+        const highPriorityWins = monthlyHistory.filter((item) => item.priority === "high").length;
+
+        let currentStreak = 0;
+        let cursor = new Date();
+        const completionDays = new Set(history.map((item) => item.completedAt.slice(0, 10)));
+        while (completionDays.has(cursor.toISOString().slice(0, 10))) {
+          currentStreak += 1;
+          cursor.setDate(cursor.getDate() - 1);
+        }
+
+        const badge =
+          points >= 28
+            ? "Domaci legenda"
+            : currentStreak >= 3
+              ? "Streak master"
+              : highPriorityWins >= 3
+                ? "Hasic pozaru"
+                : "V hre";
+
+        return {
           ...member,
-          points: getMonthlyPoints(member.id, data.taskHistory),
-        }))
-        .sort((left, right) => right.points - left.points),
-    [data.members, data.taskHistory]
+          points,
+          level,
+          currentStreak,
+          highPriorityWins,
+          badge,
+        };
+      })
+      .sort((left, right) => right.points - left.points);
+  }, [data.members, data.taskHistory]);
+
+  const wheelCandidates = useMemo(
+    () =>
+      data.tasks
+        .filter((task) => !task.done)
+        .sort((left, right) => getTaskSortKey(left).localeCompare(getTaskSortKey(right))),
+    [data.tasks]
   );
 
   const memberOnDuty = todayTasks[0]
@@ -656,6 +714,62 @@ export default function HomePage() {
       await runMutation("/api/notes", { body: noteBody.trim() });
       setNoteBody("");
     } catch {}
+  }
+
+  async function handlePhotoSelection(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setPhotoError("Vyber prosim obrazek.");
+      return;
+    }
+
+    if (file.size > 1_200_000) {
+      setPhotoError("Fotka je moc velka. Zkus mensi obrazek.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotoDataUrl(typeof reader.result === "string" ? reader.result : "");
+      setPhotoError("");
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  }
+
+  async function addPhotoPost(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!photoDataUrl) {
+      setPhotoError("Nejdriv vyber fotku.");
+      return;
+    }
+
+    try {
+      await runMutation("/api/photos", {
+        imageUrl: photoDataUrl,
+        caption: photoCaption,
+      });
+      setPhotoCaption("");
+      setPhotoDataUrl("");
+      setPhotoError("");
+    } catch {
+      setPhotoError("Fotku se nepodarilo nahrat.");
+    }
+  }
+
+  function spinWheel() {
+    if (wheelCandidates.length === 0 || isSpinningWheel) return;
+
+    setIsSpinningWheel(true);
+    window.setTimeout(() => {
+      const randomBuffer = new Uint32Array(1);
+      window.crypto.getRandomValues(randomBuffer);
+      const selected = wheelCandidates[randomBuffer[0] % wheelCandidates.length] ?? null;
+      setWheelResult(selected);
+      setIsSpinningWheel(false);
+    }, 1200);
   }
 
   async function sendChatMessage(event: FormEvent<HTMLFormElement>) {
@@ -965,7 +1079,7 @@ export default function HomePage() {
           </p>
           <div className={styles.scoreRow}>
             <div>
-              <strong>{memberOnDuty ? getMonthlyPoints(memberOnDuty.id, data.taskHistory) : 0}</strong>
+              <strong>{memberOnDuty ? (leaderboard.find((member) => member.id === memberOnDuty.id)?.points ?? 0) : 0}</strong>
               <span>body tento mesic</span>
             </div>
             <div>
@@ -1226,14 +1340,31 @@ export default function HomePage() {
   }
 
   function renderFamily() {
+    const podium = leaderboard.slice(0, 3);
+
     return (
       <section className={styles.singleSection}>
         <article className={`${styles.panel} ${styles.panelFull}`}>
           <div className={styles.panelHeader}>
             <div>
               <span className={styles.sectionTag}>Rodina</span>
-              <h2>Body a zebricek</h2>
+              <h2>Body, levely a zebricek</h2>
             </div>
+          </div>
+          <div className={styles.rewardStrip}>
+            {podium.map((member, index) => (
+              <div key={member.id} className={styles.rewardCard}>
+                <span className={styles.cardLabel}>#{index + 1}</span>
+                <strong>{member.name}</strong>
+                <p>
+                  Level {member.level} · {member.badge}
+                </p>
+                <div className={styles.rewardMeta}>
+                  <span>{member.points} bodu</span>
+                  <span>{member.currentStreak}d streak</span>
+                </div>
+              </div>
+            ))}
           </div>
           <div className={styles.familyGrid}>
             {leaderboard.map((member, index) => (
@@ -1246,7 +1377,9 @@ export default function HomePage() {
                 </strong>
                 <span>@{member.username}</span>
                 <p>{member.points} bodu za splnene ukoly tento mesic</p>
-                <small>{member.canManage ? "muze pridavat ukoly" : "muze jen plnit svoje ukoly"}</small>
+                <small>
+                  Level {member.level} · streak {member.currentStreak} dni · {member.badge}
+                </small>
               </div>
             ))}
           </div>
@@ -1349,6 +1482,112 @@ export default function HomePage() {
               );
             })}
             {data.householdNotes.length === 0 ? <div className={styles.emptyState}>Zatim tu nejsou zadne domaci poznamky.</div> : null}
+          </div>
+        </article>
+      </section>
+    );
+  }
+
+  function renderPhotos() {
+    return (
+      <section className={styles.singleSection}>
+        <article className={`${styles.panel} ${styles.panelFull}`}>
+          <div className={styles.panelHeader}>
+            <div>
+              <span className={styles.sectionTag}>Fotky</span>
+              <h2>Rodinna nastenka</h2>
+            </div>
+          </div>
+          <form className={styles.formStack} onSubmit={(event) => void addPhotoPost(event)}>
+            <div className={styles.photoUploadRow}>
+              <label className={styles.uploadTile}>
+                <input type="file" accept="image/*" onChange={(event) => void handlePhotoSelection(event)} />
+                <span>{photoDataUrl ? "Fotka vybrana" : "Vybrat fotku"}</span>
+              </label>
+              <input
+                value={photoCaption}
+                onChange={(event) => setPhotoCaption(event.target.value)}
+                placeholder="Treba uklizeno nebo hotovy nakup"
+              />
+            </div>
+            {photoDataUrl ? <img className={styles.photoPreview} src={photoDataUrl} alt="Nahled fotky" /> : null}
+            {photoError ? <p className={styles.error}>{photoError}</p> : null}
+            <button className={styles.primaryButton} type="submit">
+              Pridat na nastenku
+            </button>
+          </form>
+          <div className={styles.photoWall}>
+            {data.photoPosts.map((photo: PhotoPost) => {
+              const member = data.members.find((entry) => entry.id === photo.authorId);
+              return (
+                <article key={photo.id} className={styles.photoCard}>
+                  <img src={photo.imageUrl} alt={photo.caption || "Rodinna fotka"} className={styles.photoImage} />
+                  <div className={styles.photoMeta}>
+                    {member ? renderMemberPill(member.id) : null}
+                    <span>{formatDateTimeLabel(photo.createdAt)}</span>
+                  </div>
+                  {photo.caption ? <p>{photo.caption}</p> : null}
+                </article>
+              );
+            })}
+            {data.photoPosts.length === 0 ? <div className={styles.emptyState}>Zatim tu nejsou zadne fotky.</div> : null}
+          </div>
+        </article>
+      </section>
+    );
+  }
+
+  function renderWheel() {
+    const wheelSlices = wheelCandidates.slice(0, 6);
+
+    return (
+      <section className={styles.singleSection}>
+        <article className={`${styles.panel} ${styles.panelFull}`}>
+          <div className={styles.panelHeader}>
+            <div>
+              <span className={styles.sectionTag}>Kolo stesti</span>
+              <h2>Nahodny ukol dne</h2>
+            </div>
+            <button className={styles.primaryButton} onClick={spinWheel} disabled={wheelCandidates.length === 0 || isSpinningWheel}>
+              {isSpinningWheel ? "Tocim..." : "Roztočit kolo"}
+            </button>
+          </div>
+          <div className={styles.wheelLayout}>
+            <div className={`${styles.wheelCard} ${isSpinningWheel ? styles.wheelSpinning : ""}`}>
+              <div className={styles.wheelPointer} />
+              <div className={styles.wheelSurface}>
+                {wheelSlices.length === 0 ? (
+                  <span className={styles.wheelCenterText}>Zadne otevrene ukoly</span>
+                ) : (
+                  wheelSlices.map((task, index) => (
+                    <div
+                      key={task.id}
+                      className={styles.wheelSlice}
+                      style={{
+                        transform: `rotate(${index * (360 / wheelSlices.length)}deg)`,
+                      }}
+                    >
+                      <span>{task.title}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className={styles.wheelResultCard}>
+              <span className={styles.cardLabel}>Nahodny vyber</span>
+              {wheelResult ? (
+                <>
+                  <h3>{wheelResult.title}</h3>
+                  <p>
+                    {formatDateLabel(wheelResult.date)} · {formatTimeLabel(wheelResult.time)}
+                  </p>
+                  {"notes" in wheelResult && wheelResult.notes ? <p>{wheelResult.notes}</p> : null}
+                  {renderMemberPill(wheelResult.assigneeId)}
+                </>
+              ) : (
+                <p>Klikni na kolo a vybereme jeden otevreny ukol opravdu nahodne.</p>
+              )}
+            </div>
           </div>
         </article>
       </section>
@@ -1607,6 +1846,8 @@ export default function HomePage() {
           {activeSection === "mine" ? renderMine() : null}
           {activeSection === "reminders" ? <section className={styles.singleSection}>{renderRemindersPanel()}</section> : null}
           {activeSection === "notes" ? renderNotesSection() : null}
+          {activeSection === "photos" ? renderPhotos() : null}
+          {activeSection === "wheel" ? renderWheel() : null}
           {activeSection === "chat" ? renderChat() : null}
           {activeSection === "admin" ? renderAdmin() : null}
           {activeSection === "calendar" ? renderCalendarDialog() : null}
