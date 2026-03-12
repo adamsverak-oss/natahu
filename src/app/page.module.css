@@ -1,7 +1,7 @@
 .pageShell {
-  width: min(1480px, calc(100% - 24px));
+  width: min(1360px, calc(100% - 24px));
   margin: 0 auto;
-  padding: 20px 0 40px;
+  padding: 18px 0 40px;
 }
 
 .loadingState {
@@ -38,7 +38,7 @@
 .appLayout {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
-  gap: 24px;
+  gap: 22px;
 }
 
 .sidebar,
@@ -58,7 +58,7 @@
   position: sticky;
   top: 24px;
   border-radius: 30px;
-  padding: 24px;
+  padding: 24px 22px;
 }
 
 .brandBlock h1 {
@@ -105,6 +105,8 @@
 
 .navItem {
   width: 100%;
+  display: grid;
+  gap: 4px;
   text-align: left;
   border: 1px solid rgba(24, 33, 31, 0.08);
   border-radius: 18px;
@@ -157,7 +159,9 @@
 .calendarList,
 .notesList,
 .chatList,
-.historyList {
+.historyList,
+.adminGrid,
+.reminderGrid {
   display: grid;
   gap: 16px;
 }
@@ -224,6 +228,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .topbar h2,
@@ -236,6 +242,8 @@
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .emptyState,
@@ -322,7 +330,6 @@
 .taskActions,
 .actionRow,
 .chatComposer,
-.adminGrid,
 .noteHeader,
 .historyMeta {
   display: flex;
@@ -341,6 +348,7 @@
 .historyMeta {
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .taskMeta {
@@ -467,6 +475,18 @@
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(24, 33, 31, 0.06);
+}
+
+.mainColumn {
+  align-content: start;
+}
+
+.singleSection {
+  align-content: start;
+}
+
+.loggedInBox {
+  align-content: start;
 }
 
 .historyItem {
@@ -596,6 +616,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .noteCard,
@@ -604,9 +626,30 @@
   gap: 10px;
 }
 
+.chatComposer {
+  align-items: stretch;
+}
+
+.chatComposer input {
+  flex: 1 1 320px;
+}
+
+.chatComposer button {
+  flex: 0 0 auto;
+}
+
+.chatList {
+  gap: 12px;
+}
+
 .chatBubbleMine {
   border-color: rgba(255, 122, 24, 0.25);
   background: rgba(255, 247, 235, 0.95);
+}
+
+.chatBubbleUnread {
+  border-color: rgba(217, 47, 85, 0.35);
+  box-shadow: inset 4px 0 0 0 rgba(217, 47, 85, 0.7);
 }
 
 .profilePreview {
@@ -623,22 +666,6 @@
   margin: 0;
   color: #b02042;
 }
-
-@media (max-width: 1080px) {
-  .appLayout {
-    grid-template-columns: 1fr;
-  }
-
-  .sidebar {
-    display: none;
-  }
-
-  .mobileNav {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-    margin-bottom: 12px;
-  }
 
 .mobileNavItemActive {
   background: linear-gradient(135deg, rgba(255, 122, 24, 0.95), rgba(255, 179, 71, 0.92));
@@ -657,6 +684,22 @@
 .unreadDotMobile {
   margin-left: 6px;
 }
+
+@media (max-width: 1080px) {
+  .appLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .mobileNav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+  }
 
   .contentGrid {
     grid-template-columns: 1fr;
@@ -701,7 +744,7 @@
 
   .topbarMeta {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
     flex-wrap: wrap;
   }
 
@@ -714,10 +757,13 @@
 
   .calendarWeekdays,
   .calendarGrid,
-  .mobileNav,
   .familyGrid,
   .adminGrid,
   .reminderGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .mobileNav {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -725,5 +771,13 @@
   .calendarCellEmpty {
     min-height: 84px;
     padding: 10px;
+  }
+
+  .chatComposer {
+    align-items: stretch;
+  }
+
+  .chatComposer button {
+    width: 100%;
   }
 }

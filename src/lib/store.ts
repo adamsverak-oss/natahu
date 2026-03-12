@@ -106,6 +106,10 @@ export async function cleanupOldCompletedTasks() {
       and completed_at is not null
       and completed_at < ${currentMonthStartIso()}
   `;
+  await sql`
+    delete from chat_messages
+    where created_at < now() - interval '72 hours'
+  `;
 }
 
 export async function readAppData(): Promise<AppData> {
@@ -197,6 +201,6 @@ export async function readAppData(): Promise<AppData> {
     shoppingItems: shoppingItems.map(mapShoppingItem),
     taskHistory: taskHistory.map(mapHistoryItem),
     householdNotes: householdNotes.map(mapHouseholdNote),
-    chatMessages: chatMessages.reverse().map(mapChatMessage),
+    chatMessages: chatMessages.map(mapChatMessage),
   };
 }

@@ -232,6 +232,12 @@ export default function HomePage() {
     setLastSeenChatAt(window.localStorage.getItem(key) || "");
   }, [activeUser]);
 
+  useEffect(() => {
+    if (activeSection === "chat") {
+      markChatAsRead();
+    }
+  }, [activeSection]);
+
   const todayTasks = useMemo(
     () => data.tasks.filter((task) => task.date === todayKey),
     [data.tasks, todayKey]
@@ -569,7 +575,7 @@ export default function HomePage() {
 
   function markChatAsRead(timestamp?: string) {
     if (!activeUser || typeof window === "undefined") return;
-    const latest = timestamp || data.chatMessages.at(-1)?.createdAt || new Date().toISOString();
+    const latest = timestamp || data.chatMessages[0]?.createdAt || new Date().toISOString();
     const key = `${chatSeenStorageKey}-${activeUser.id}`;
     window.localStorage.setItem(key, latest);
     setLastSeenChatAt(latest);
@@ -1225,11 +1231,18 @@ export default function HomePage() {
             {data.chatMessages.map((message: ChatMessage) => {
               const member = data.members.find((entry) => entry.id === message.authorId);
               const mine = activeUser?.id === message.authorId;
+              const unread = !mine && (!lastSeenChatAt || message.createdAt > lastSeenChatAt);
               return (
-                <div key={message.id} className={`${styles.chatBubble} ${mine ? styles.chatBubbleMine : ""}`}>
+                <div
+                  key={message.id}
+                  className={`${styles.chatBubble} ${mine ? styles.chatBubbleMine : ""} ${unread ? styles.chatBubbleUnread : ""}`}
+                >
                   <div className={styles.noteHeader}>
                     {member ? renderMemberPill(member.id) : null}
-                    <span>{formatDateTimeLabel(message.createdAt)}</span>
+                    <span>
+                      {unread ? "Nova zprava · " : ""}
+                      {formatDateTimeLabel(message.createdAt)}
+                    </span>
                   </div>
                   <p>{message.body}</p>
                 </div>
