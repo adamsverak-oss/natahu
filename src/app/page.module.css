@@ -59,6 +59,9 @@
   top: 24px;
   border-radius: 30px;
   padding: 24px 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(255, 250, 243, 0.92)),
+    var(--panel);
 }
 
 .brandBlock h1 {
@@ -111,7 +114,14 @@
   border: 1px solid rgba(24, 33, 31, 0.08);
   border-radius: 18px;
   padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.72);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.navItem:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 26px rgba(65, 44, 17, 0.08);
+  border-color: rgba(255, 122, 24, 0.18);
 }
 
 .navItem strong,
@@ -143,6 +153,9 @@
 .topbar {
   border-radius: 28px;
   padding: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 252, 247, 0.96)),
+    var(--panel);
 }
 
 .loginCard,
@@ -253,12 +266,14 @@
 .statusText {
   padding: 14px 16px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.8);
   border: 1px dashed rgba(24, 33, 31, 0.12);
 }
 
 .contentGrid {
   grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-rows: minmax(180px, auto);
+  align-items: stretch;
 }
 
 .panel {
@@ -271,6 +286,36 @@
 
 .panelFull {
   grid-column: 1 / -1;
+}
+
+.dashboardHero {
+  grid-column: span 7;
+}
+
+.dashboardHighlight {
+  grid-column: span 5;
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboardHighlight::after {
+  content: "";
+  position: absolute;
+  right: -38px;
+  bottom: -74px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+
+.dashboardForm {
+  grid-column: span 5;
+}
+
+.dashboardSide {
+  grid-column: span 3;
 }
 
 .accentPanel {
@@ -300,7 +345,7 @@
 .datePill {
   padding: 10px 14px;
   border-radius: 999px;
-  background: rgba(24, 33, 31, 0.06);
+  background: rgba(24, 33, 31, 0.05);
   color: var(--muted);
   font-size: 0.92rem;
 }
@@ -316,7 +361,7 @@
   border: 1px solid rgba(24, 33, 31, 0.08);
   border-radius: 18px;
   padding: 16px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .taskDone {
@@ -354,11 +399,12 @@
 }
 
 .twoCols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
 }
 
 .twoCols > * {
-  flex: 1 1 0;
   min-width: 0;
 }
 
@@ -446,7 +492,7 @@
 .scoreRow div,
 .reminderCard {
   padding: 16px;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.66);
   border-radius: 16px;
   border: 1px solid rgba(24, 33, 31, 0.06);
 }
@@ -484,7 +530,7 @@
 .memberCard {
   padding: 16px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.78);
   border: 1px solid rgba(24, 33, 31, 0.06);
 }
 
@@ -669,7 +715,7 @@
   align-items: center;
   padding: 14px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 255, 255, 0.78);
   border: 1px solid rgba(24, 33, 31, 0.06);
 }
 
@@ -717,6 +763,10 @@
   }
 
   .panel,
+  .dashboardHero,
+  .dashboardHighlight,
+  .dashboardForm,
+  .dashboardSide,
   .panelWide,
   .panelFull {
     grid-column: auto;
@@ -739,7 +789,6 @@
   .panelHeader,
   .taskTop,
   .taskMeta,
-  .twoCols,
   .scoreRow,
   .calendarRow,
   .calendarMeta,
@@ -776,6 +825,10 @@
 
   .mobileNav {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .twoCols {
+    grid-template-columns: 1fr;
   }
 
   .calendarCell,

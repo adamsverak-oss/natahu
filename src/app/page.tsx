@@ -825,7 +825,7 @@ export default function HomePage() {
   function renderDashboard() {
     return (
       <section className={styles.contentGrid}>
-        <article className={`${styles.panel} ${styles.panelWide}`}>
+        <article className={`${styles.panel} ${styles.dashboardHero}`}>
           <div className={styles.panelHeader}>
             <div>
               <span className={styles.sectionTag}>Dnesek</span>
@@ -838,7 +838,7 @@ export default function HomePage() {
           </div>
         </article>
 
-        <article className={`${styles.panel} ${styles.accentPanel}`}>
+        <article className={`${styles.panel} ${styles.accentPanel} ${styles.dashboardHighlight}`}>
           <div className={styles.panelHeader}>
             <div>
               <span className={styles.sectionTag}>Na tahu</span>
@@ -867,7 +867,7 @@ export default function HomePage() {
           </div>
         </article>
 
-        <article className={styles.panel}>
+        <article className={`${styles.panel} ${styles.dashboardForm}`}>
           <div className={styles.panelHeader}>
             <div>
               <span className={styles.sectionTag}>Pridani</span>
@@ -877,7 +877,7 @@ export default function HomePage() {
           {canManage ? renderTaskForm() : <div className={styles.permissionCard}>Daniel muze ukoly plnit, ale nepridava je.</div>}
         </article>
 
-        <article className={styles.panel}>
+        <article className={`${styles.panel} ${styles.dashboardSide}`}>
           <div className={styles.panelHeader}>
             <div>
               <span className={styles.sectionTag}>Blizi se</span>

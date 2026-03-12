@@ -1,7 +1,7 @@
 :root {
   color-scheme: light;
-  --bg: #f5efe4;
-  --panel: rgba(255, 252, 247, 0.88);
+  --bg: #f6efe2;
+  --panel: rgba(255, 251, 245, 0.9);
   --panel-strong: #fffdf9;
   --ink: #18211f;
   --muted: #5a655d;
@@ -29,9 +29,10 @@ body {
   margin: 0;
   min-height: 100%;
   background:
-    radial-gradient(circle at top left, rgba(255, 182, 66, 0.25), transparent 28%),
-    radial-gradient(circle at top right, rgba(45, 143, 133, 0.18), transparent 24%),
-    linear-gradient(180deg, #fbf7ef 0%, var(--bg) 100%);
+    radial-gradient(circle at top left, rgba(255, 182, 66, 0.28), transparent 26%),
+    radial-gradient(circle at 82% 12%, rgba(45, 143, 133, 0.16), transparent 22%),
+    radial-gradient(circle at bottom right, rgba(215, 97, 125, 0.12), transparent 20%),
+    linear-gradient(180deg, #fcf7ef 0%, var(--bg) 100%);
   color: var(--ink);
   font-family: var(--font-body);
 }
