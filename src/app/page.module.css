@@ -178,6 +178,8 @@
 .calendarActions select,
 .chatComposer input {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   border: 1px solid rgba(24, 33, 31, 0.1);
   background: rgba(255, 255, 255, 0.88);
   border-radius: 14px;
@@ -349,6 +351,15 @@
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.twoCols {
+  align-items: stretch;
+}
+
+.twoCols > * {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .taskMeta {
