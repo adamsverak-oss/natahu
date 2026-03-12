@@ -1,0 +1,549 @@
+.pageShell {
+  width: min(1400px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 0 48px;
+}
+
+.loadingState {
+  min-height: 60vh;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 36px;
+  box-shadow: var(--shadow);
+}
+
+.loginGate {
+  width: min(460px, 100%);
+  display: grid;
+  gap: 16px;
+}
+
+.appLayout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 24px;
+}
+
+.sidebar,
+.panel,
+.loginCard,
+.topbar {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow);
+}
+
+.sidebar {
+  display: grid;
+  gap: 18px;
+  align-self: start;
+  position: sticky;
+  top: 24px;
+  border-radius: 30px;
+  padding: 24px;
+}
+
+.brandBlock h1 {
+  margin: 12px 0;
+  font-size: 3rem;
+  line-height: 0.95;
+}
+
+.brandBlock p,
+.loggedInBox p,
+.navItem span,
+.warningBar,
+.permissionCard,
+.emptyState,
+.taskMeta,
+.timelineItem p,
+.calendarRow p,
+.memberCard span,
+.memberCard p,
+.memberCard small,
+.topbarMeta {
+  color: var(--muted);
+}
+
+.kicker,
+.sectionTag,
+.cardLabel {
+  display: inline-flex;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(24, 33, 31, 0.06);
+  color: var(--muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.navList {
+  display: grid;
+  gap: 10px;
+}
+
+.navItem {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(24, 33, 31, 0.08);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.navItem strong,
+.memberCard strong,
+.shoppingItem strong,
+.calendarRow strong {
+  display: block;
+}
+
+.navItemActive {
+  background: linear-gradient(135deg, rgba(255, 122, 24, 0.95), rgba(255, 179, 71, 0.92));
+  color: white;
+}
+
+.navItemActive span {
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.loginCard,
+.panel,
+.topbar {
+  border-radius: 28px;
+  padding: 22px;
+}
+
+.loginCard,
+.loggedInBox,
+.loginForm,
+.formStack,
+.mainColumn,
+.contentGrid,
+.singleSection,
+.taskList,
+.timeline,
+.familyGrid,
+.shoppingList,
+.calendarList {
+  display: grid;
+  gap: 16px;
+}
+
+.loginForm label {
+  display: grid;
+  gap: 8px;
+}
+
+.loginForm input,
+.formStack input,
+.formStack select,
+.inlineForm input,
+.inlineForm select {
+  width: 100%;
+  border: 1px solid rgba(24, 33, 31, 0.1);
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 14px;
+  padding: 14px 16px;
+  outline: none;
+}
+
+.primaryButton,
+.secondaryButton {
+  border: 0;
+  border-radius: 14px;
+  padding: 14px 18px;
+  font-weight: 700;
+}
+
+.primaryButton {
+  background: linear-gradient(135deg, var(--accent), #ffb347);
+  color: white;
+}
+
+.secondaryButton {
+  background: rgba(24, 33, 31, 0.08);
+  color: var(--ink);
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.topbar h2,
+.panelHeader h2 {
+  margin: 10px 0 0;
+  font-size: 1.65rem;
+}
+
+.topbarMeta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.warningBar,
+.permissionCard,
+.emptyState {
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px dashed rgba(24, 33, 31, 0.12);
+}
+
+.contentGrid {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+.panel {
+  grid-column: span 4;
+}
+
+.panelWide {
+  grid-column: span 8;
+}
+
+.panelFull {
+  grid-column: 1 / -1;
+}
+
+.accentPanel {
+  background: linear-gradient(180deg, rgba(255, 122, 24, 0.92), rgba(207, 94, 6, 0.94));
+  color: white;
+}
+
+.accentPanel .sectionTag,
+.accentPanel .panelText,
+.accentPanel .scoreRow span {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.accentPanel .scoreRow div {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.datePill {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(24, 33, 31, 0.06);
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.taskCard,
+.shoppingItem,
+.calendarRow {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(24, 33, 31, 0.08);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.taskLocked {
+  cursor: not-allowed;
+}
+
+.taskDone {
+  opacity: 0.65;
+  text-decoration: line-through;
+}
+
+.taskTop,
+.taskMeta,
+.inlineForm,
+.twoCols,
+.scoreRow,
+.calendarMeta {
+  display: flex;
+  gap: 12px;
+}
+
+.taskTop,
+.taskMeta,
+.inlineForm,
+.scoreRow,
+.calendarMeta {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.taskMeta {
+  margin-top: 8px;
+  font-size: 0.9rem;
+}
+
+.memberBadge {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  color: white;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.scoreRow div {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
+  border: 1px solid rgba(24, 33, 31, 0.06);
+}
+
+.scoreRow strong {
+  display: block;
+  font-size: 1.5rem;
+}
+
+.timelineItem {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.timelineDot {
+  width: 12px;
+  height: 12px;
+  margin-top: 8px;
+  border-radius: 50%;
+}
+
+.familyGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.memberCard {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(24, 33, 31, 0.06);
+}
+
+.memberCard small {
+  display: block;
+  margin-top: 8px;
+}
+
+.calendarRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.calendarToolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.calendarTitle {
+  font-size: 1.2rem;
+  text-transform: capitalize;
+}
+
+.calendarWeekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.calendarWeekdays span {
+  padding: 0 6px;
+}
+
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.calendarCell,
+.calendarCellEmpty {
+  min-height: 104px;
+  border-radius: 18px;
+}
+
+.calendarCell {
+  border: 1px solid rgba(24, 33, 31, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 12px;
+  text-align: left;
+}
+
+.calendarCellEmpty {
+  background: rgba(24, 33, 31, 0.03);
+  border: 1px dashed rgba(24, 33, 31, 0.06);
+}
+
+.calendarCellSelected {
+  border-color: rgba(255, 122, 24, 0.6);
+  box-shadow: inset 0 0 0 2px rgba(255, 122, 24, 0.18);
+}
+
+.calendarCellToday {
+  background: rgba(255, 122, 24, 0.14);
+}
+
+.calendarCellTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.calendarCellTop span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(24, 33, 31, 0.06);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.todayBadge {
+  background: rgba(255, 122, 24, 0.18);
+  color: var(--accent-dark);
+}
+
+.calendarDots {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.calendarMiniList {
+  display: grid;
+  gap: 6px;
+}
+
+.calendarMiniItem {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.calendarMiniItem small,
+.calendarMore,
+.calendarTodayHint {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.calendarMiniItem small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendarDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.calendarSelectedHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.error {
+  margin: 0;
+  color: #b02042;
+}
+
+@media (max-width: 1080px) {
+  .appLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+  }
+
+  .contentGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel,
+  .panelWide,
+  .panelFull {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .pageShell {
+    width: min(100% - 20px, 100%);
+    padding-top: 16px;
+  }
+
+  .sidebar,
+  .loginCard,
+  .panel,
+  .topbar {
+    padding: 18px;
+    border-radius: 24px;
+  }
+
+  .topbar,
+  .panelHeader,
+  .taskTop,
+  .taskMeta,
+  .inlineForm,
+  .twoCols,
+  .scoreRow,
+  .calendarRow,
+  .calendarMeta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .calendarToolbar,
+  .calendarSelectedHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .calendarWeekdays,
+  .calendarGrid {
+    gap: 6px;
+  }
+
+  .calendarCell,
+  .calendarCellEmpty {
+    min-height: 76px;
+    padding: 10px;
+  }
+
+  .familyGrid {
+    grid-template-columns: 1fr;
+  }
+}

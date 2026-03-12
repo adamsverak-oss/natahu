@@ -1,0 +1,48 @@
+{
+  "members": [
+    {
+      "id": "adam",
+      "name": "Adam",
+      "username": "adam",
+      "password": "natahu123",
+      "color": "#ff7a18",
+      "canManage": true
+    },
+    {
+      "id": "veronika",
+      "name": "Veronika",
+      "username": "veronika",
+      "password": "rodina123",
+      "color": "#2d8f85",
+      "canManage": true
+    },
+    {
+      "id": "gustav",
+      "name": "Gustav",
+      "username": "gustav",
+      "password": "domov123",
+      "color": "#d7617d",
+      "canManage": true
+    },
+    {
+      "id": "daniel",
+      "name": "Daniel",
+      "username": "daniel",
+      "password": "ukol123",
+      "color": "#edc15c",
+      "canManage": false
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-1773335490647",
+      "title": "tata dojet domu ze slovenska",
+      "assigneeId": "gustav",
+      "date": "2026-03-12",
+      "repeatLabel": "Jednorazove",
+      "done": false,
+      "completedAt": null
+    }
+  ],
+  "shoppingItems": []
+}
