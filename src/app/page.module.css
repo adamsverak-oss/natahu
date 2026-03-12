@@ -21,6 +21,15 @@
   gap: 16px;
 }
 
+.errorCard {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(176, 32, 66, 0.08);
+  border: 1px solid rgba(176, 32, 66, 0.18);
+}
+
 .mobileNav {
   display: none;
 }
@@ -385,6 +394,19 @@
   margin-bottom: 16px;
 }
 
+.calendarActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.calendarActions select {
+  border: 1px solid rgba(24, 33, 31, 0.1);
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
 .calendarTitle {
   font-size: 1.2rem;
   text-transform: capitalize;
@@ -583,6 +605,12 @@
   .calendarSelectedHeader {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .calendarActions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .calendarWeekdays,

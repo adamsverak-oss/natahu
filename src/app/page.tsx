@@ -78,6 +78,7 @@ export default function HomePage() {
   const [data, setData] = useState<AppData>(emptyData);
   const [activeUser, setActiveUser] = useState<SessionUser | null>(null);
   const [activeSection, setActiveSection] = useState<SectionId>("dashboard");
+  const [bootstrapError, setBootstrapError] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -94,6 +95,7 @@ export default function HomePage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDate, setSelectedDate] = useState(getTodayKey());
+  const [calendarFilterUserId, setCalendarFilterUserId] = useState("all");
   const [adminUserId, setAdminUserId] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
@@ -109,25 +111,39 @@ export default function HomePage() {
       setLoading(true);
     }
 
-    const response = await fetch("/api/bootstrap", {
-      cache: "no-store",
-      credentials: "include",
-    });
+    try {
+      const response = await fetch("/api/bootstrap", {
+        cache: "no-store",
+        credentials: "include",
+      });
 
-    if (response.status === 401) {
-      setActiveUser(null);
-      setData(emptyData);
+      if (response.status === 401) {
+        setActiveUser(null);
+        setData(emptyData);
+        setBootstrapError("");
+        setLoading(false);
+        return;
+      }
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { hint?: string } | null;
+        setBootstrapError(payload?.hint || "Nepodarilo se nacist aplikaci.");
+        setLoading(false);
+        return;
+      }
+
+      const payload = (await response.json()) as BootstrapPayload;
+      setActiveUser(payload.user);
+      setData(payload.data);
+      setTaskAssigneeId((current) => current || payload.data.members[0]?.id || "");
+      setShoppingAssigneeId((current) => current || payload.data.members[0]?.id || "");
+      setAdminUserId((current) => current || payload.data.members[0]?.id || "");
+      setBootstrapError("");
       setLoading(false);
-      return;
+    } catch {
+      setBootstrapError("Spojeni s aplikaci selhalo. Zkus obnovit stranku.");
+      setLoading(false);
     }
-
-    const payload = (await response.json()) as BootstrapPayload;
-    setActiveUser(payload.user);
-    setData(payload.data);
-    setTaskAssigneeId((current) => current || payload.data.members[0]?.id || "");
-    setShoppingAssigneeId((current) => current || payload.data.members[0]?.id || "");
-    setAdminUserId((current) => current || payload.data.members[0]?.id || "");
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -218,6 +234,7 @@ export default function HomePage() {
     }
 
     setLoginError("");
+    setBootstrapError("");
     await loadBootstrap();
   }
 
@@ -549,12 +566,35 @@ export default function HomePage() {
               Predchozi
             </button>
             <strong className={styles.calendarTitle}>{getMonthLabel(calendarMonth)}</strong>
-            <button
-              className={styles.secondaryButton}
-              onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
-            >
-              Dalsi
-            </button>
+            <div className={styles.calendarActions}>
+              <select
+                value={calendarFilterUserId}
+                onChange={(event) => setCalendarFilterUserId(event.target.value)}
+              >
+                <option value="all">Vsichni</option>
+                {data.members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className={styles.secondaryButton}
+                onClick={() => {
+                  const today = new Date();
+                  setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+                  setSelectedDate(todayKey);
+                }}
+              >
+                Dnes
+              </button>
+              <button
+                className={styles.secondaryButton}
+                onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
+              >
+                Dalsi
+              </button>
+            </div>
           </div>
 
           <div className={styles.calendarWeekdays}>
@@ -571,6 +611,7 @@ export default function HomePage() {
 
               const tasksForDay = data.tasks
                 .filter((task) => task.date === cell.date)
+                .filter((task) => calendarFilterUserId === "all" || task.assigneeId === calendarFilterUserId)
                 .sort((left, right) => getTaskSortKey(left).localeCompare(getTaskSortKey(right)));
               const isSelected = selectedDate === cell.date;
               const isToday = todayKey === cell.date;
@@ -616,12 +657,23 @@ export default function HomePage() {
           <div className={styles.calendarList}>
             <div className={styles.calendarSelectedHeader}>
               <strong>{formatDateLabel(selectedDate)}</strong>
-              <span>{selectedDateTasks.length} ukolu</span>
+              <span>
+                {
+                  selectedDateTasks.filter(
+                    (task) => calendarFilterUserId === "all" || task.assigneeId === calendarFilterUserId
+                  ).length
+                }{" "}
+                ukolu
+              </span>
             </div>
-            {selectedDateTasks.length === 0 ? (
+            {selectedDateTasks.filter(
+              (task) => calendarFilterUserId === "all" || task.assigneeId === calendarFilterUserId
+            ).length === 0 ? (
               <div className={styles.emptyState}>Na vybrany den zatim neni nic naplanovaneho.</div>
             ) : (
-              selectedDateTasks.map((task) => {
+              selectedDateTasks
+                .filter((task) => calendarFilterUserId === "all" || task.assigneeId === calendarFilterUserId)
+                .map((task) => {
                 const member = data.members.find((item) => item.id === task.assigneeId);
                 return (
                   <div key={task.id} className={styles.calendarRow}>
@@ -812,6 +864,15 @@ export default function HomePage() {
             <span className={styles.kicker}>Soukroma rodinna aplikace</span>
             <h1>NaTahu</h1>
             <p>Bez prihlaseni nejsou rodinna data pristupna. Prihlas se svym jmenem a heslem.</p>
+            {bootstrapError ? (
+              <div className={styles.errorCard}>
+                <strong>Aplikace se nepodarilo nacist.</strong>
+                <p>{bootstrapError}</p>
+                <button className={styles.secondaryButton} onClick={() => void loadBootstrap(true)}>
+                  Zkusit znovu
+                </button>
+              </div>
+            ) : null}
             <form className={styles.loginForm} onSubmit={(event) => void handleLogin(event)}>
               <label>
                 Jmeno
