@@ -29,6 +29,8 @@ type BootstrapPayload = {
   data: AppData;
 };
 
+const chatSeenStorageKey = "natahu-chat-last-seen";
+
 type RepeatType = "none" | "daily" | "weekly" | "monthly";
 type Priority = "low" | "medium" | "high";
 
@@ -109,6 +111,8 @@ export default function HomePage() {
   const [loginError, setLoginError] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [isSendingChat, setIsSendingChat] = useState(false);
+  const [lastSeenChatAt, setLastSeenChatAt] = useState("");
 
   const [taskForm, setTaskForm] = useState({
     title: "",
@@ -149,6 +153,7 @@ export default function HomePage() {
   const [chatBody, setChatBody] = useState("");
 
   const canManage = activeUser?.canManage ?? false;
+  const canOpenAdmin = activeUser?.id === "adam";
   const todayKey = getTodayKey();
 
   const sections = [
@@ -160,7 +165,7 @@ export default function HomePage() {
     { id: "reminders" as const, label: "Pripominky", hint: "Co hori a co se blizi" },
     { id: "notes" as const, label: "Domov", hint: "Poznamky pro domacnost" },
     { id: "chat" as const, label: "Chat", hint: "Rodinna komunikace" },
-    ...(canManage ? [{ id: "admin" as const, label: "Admin", hint: "Hesla a profily" }] : []),
+    ...(canOpenAdmin ? [{ id: "admin" as const, label: "Admin", hint: "Hesla a profily" }] : []),
   ];
 
   async function loadBootstrap(showLoading = false) {
@@ -219,6 +224,12 @@ export default function HomePage() {
   useEffect(() => {
     if (!activeUser || typeof window === "undefined") return;
     setNotificationsEnabled("Notification" in window && Notification.permission === "granted");
+  }, [activeUser]);
+
+  useEffect(() => {
+    if (!activeUser || typeof window === "undefined") return;
+    const key = `${chatSeenStorageKey}-${activeUser.id}`;
+    setLastSeenChatAt(window.localStorage.getItem(key) || "");
   }, [activeUser]);
 
   const todayTasks = useMemo(
@@ -283,6 +294,13 @@ export default function HomePage() {
   const memberOnDuty = todayTasks[0]
     ? data.members.find((member) => member.id === todayTasks[0].assigneeId) ?? null
     : null;
+
+  const unreadChatCount = useMemo(() => {
+    if (!activeUser) return 0;
+    return data.chatMessages.filter(
+      (message) => message.authorId !== activeUser.id && (!lastSeenChatAt || message.createdAt > lastSeenChatAt)
+    ).length;
+  }, [activeUser, data.chatMessages, lastSeenChatAt]);
 
   useEffect(() => {
     if (!activeUser || !notificationsEnabled || typeof window === "undefined") return;
@@ -535,11 +553,26 @@ export default function HomePage() {
 
   async function sendChatMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!chatBody.trim()) return;
+    const trimmed = chatBody.trim();
+    if (!trimmed || isSendingChat) return;
     try {
-      await runMutation("/api/chat", { body: chatBody.trim() });
+      setIsSendingChat(true);
       setChatBody("");
-    } catch {}
+      await runMutation("/api/chat", { body: trimmed });
+      markChatAsRead(new Date().toISOString());
+    } catch {
+      setChatBody(trimmed);
+    } finally {
+      setIsSendingChat(false);
+    }
+  }
+
+  function markChatAsRead(timestamp?: string) {
+    if (!activeUser || typeof window === "undefined") return;
+    const latest = timestamp || data.chatMessages.at(-1)?.createdAt || new Date().toISOString();
+    const key = `${chatSeenStorageKey}-${activeUser.id}`;
+    window.localStorage.setItem(key, latest);
+    setLastSeenChatAt(latest);
   }
 
   function renderMemberPill(memberId: string) {
@@ -1184,11 +1217,11 @@ export default function HomePage() {
               onChange={(event) => setChatBody(event.target.value)}
               placeholder="Napis kratkou zpravu rodine"
             />
-            <button className={styles.primaryButton} type="submit">
-              Odeslat
+            <button className={styles.primaryButton} type="submit" disabled={isSendingChat}>
+              {isSendingChat ? "Posilam..." : "Odeslat"}
             </button>
           </form>
-          <div className={styles.chatList}>
+          <div className={styles.chatList} onMouseEnter={() => markChatAsRead()}>
             {data.chatMessages.map((message: ChatMessage) => {
               const member = data.members.find((entry) => entry.id === message.authorId);
               const mine = activeUser?.id === message.authorId;
@@ -1210,7 +1243,7 @@ export default function HomePage() {
   }
 
   function renderAdmin() {
-    if (!canManage) return null;
+    if (!canOpenAdmin) return null;
 
     const selectedMember = data.members.find((member) => member.id === adminUserId);
 
@@ -1344,9 +1377,15 @@ export default function HomePage() {
               <button
                 key={section.id}
                 className={`${styles.navItem} ${activeSection === section.id ? styles.navItemActive : ""}`}
-                onClick={() => setActiveSection(section.id)}
+                onClick={() => {
+                  setActiveSection(section.id);
+                  if (section.id === "chat") markChatAsRead();
+                }}
               >
-                <strong>{section.label}</strong>
+                <strong className={styles.navLabel}>
+                  {section.label}
+                  {section.id === "chat" && unreadChatCount > 0 ? <span className={styles.unreadDot} /> : null}
+                </strong>
                 <span>{section.hint}</span>
               </button>
             ))}
@@ -1389,9 +1428,13 @@ export default function HomePage() {
               <button
                 key={section.id}
                 className={`${styles.mobileNavItem} ${activeSection === section.id ? styles.mobileNavItemActive : ""}`}
-                onClick={() => setActiveSection(section.id)}
+                onClick={() => {
+                  setActiveSection(section.id);
+                  if (section.id === "chat") markChatAsRead();
+                }}
               >
                 {section.label}
+                {section.id === "chat" && unreadChatCount > 0 ? <span className={styles.unreadDotMobile} /> : null}
               </button>
             ))}
           </div>

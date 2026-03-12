@@ -121,6 +121,12 @@
   display: block;
 }
 
+.navLabel {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+}
+
 .navItemActive {
   background: linear-gradient(135deg, rgba(255, 122, 24, 0.95), rgba(255, 179, 71, 0.92));
   color: white;
@@ -634,10 +640,23 @@
     margin-bottom: 12px;
   }
 
-  .mobileNavItemActive {
-    background: linear-gradient(135deg, rgba(255, 122, 24, 0.95), rgba(255, 179, 71, 0.92));
-    color: white;
-  }
+.mobileNavItemActive {
+  background: linear-gradient(135deg, rgba(255, 122, 24, 0.95), rgba(255, 179, 71, 0.92));
+  color: white;
+}
+
+.unreadDot,
+.unreadDotMobile {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #d92f55;
+  flex: 0 0 auto;
+}
+
+.unreadDotMobile {
+  margin-left: 6px;
+}
 
   .contentGrid {
     grid-template-columns: 1fr;
