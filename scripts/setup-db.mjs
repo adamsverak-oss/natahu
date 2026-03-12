@@ -75,11 +75,23 @@ await sql.begin(async (tx) => {
       assignee_id text not null references users(id) on delete cascade,
       task_date date not null,
       task_time time,
+      repeat_type text not null default 'none',
+      repeat_every integer not null default 1,
       repeat_label text not null default 'Jednorazove',
       done boolean not null default false,
       completed_at timestamptz,
       created_at timestamptz not null default now()
     )
+  `;
+
+  await tx`
+    alter table tasks
+    add column if not exists repeat_type text not null default 'none'
+  `;
+
+  await tx`
+    alter table tasks
+    add column if not exists repeat_every integer not null default 1
   `;
 
   await tx`

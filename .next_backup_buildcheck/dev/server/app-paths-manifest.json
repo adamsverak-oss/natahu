@@ -1,0 +1,5 @@
+{
+  "/api/bootstrap/route": "app/api/bootstrap/route.js",
+  "/api/login/route": "app/api/login/route.js",
+  "/page": "app/page.js"
+}

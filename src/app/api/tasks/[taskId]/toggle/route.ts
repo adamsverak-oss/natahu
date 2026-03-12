@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 import { unauthorizedResponse } from "@/lib/api-auth";
 import { getCurrentUser } from "@/lib/session";
+import { getNextOccurrence } from "@/lib/repeat";
 
 export async function POST(
   _request: Request,
@@ -15,8 +16,25 @@ export async function POST(
   }
 
   const { taskId } = await context.params;
-  const rows = await sql<{ assigneeId: string; done: boolean }[]>`
-    select assignee_id as "assigneeId", done
+  const rows = await sql<{
+    assigneeId: string;
+    done: boolean;
+    title: string;
+    date: string;
+    time: string | null;
+    repeatType: "none" | "daily" | "weekly" | "monthly";
+    repeatEvery: number;
+    repeatLabel: string;
+  }[]>`
+    select
+      assignee_id as "assigneeId",
+      done,
+      title,
+      task_date::text as date,
+      task_time::text as time,
+      repeat_type as "repeatType",
+      repeat_every as "repeatEvery",
+      repeat_label as "repeatLabel"
     from tasks
     where id = ${taskId}
     limit 1
@@ -31,13 +49,57 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const nextDone = !task.done;
   await sql`
     update tasks
     set
-      done = ${!task.done},
+      done = ${nextDone},
       completed_at = ${task.done ? null : new Date().toISOString()}
     where id = ${taskId}
   `;
+
+  if (nextDone && task.repeatType !== "none") {
+    const nextDate = getNextOccurrence(task.date, task.repeatType, task.repeatEvery);
+
+    if (nextDate) {
+      const exists = await sql<{ id: string }[]>`
+        select id
+        from tasks
+        where title = ${task.title}
+          and assignee_id = ${task.assigneeId}
+          and task_date = ${nextDate}
+          and coalesce(task_time::text, '') = ${task.time ?? ""}
+          and repeat_type = ${task.repeatType}
+          and repeat_every = ${task.repeatEvery}
+        limit 1
+      `;
+
+      if (exists.length === 0) {
+        await sql`
+          insert into tasks (
+            title,
+            assignee_id,
+            task_date,
+            task_time,
+            repeat_type,
+            repeat_every,
+            repeat_label,
+            done
+          )
+          values (
+            ${task.title},
+            ${task.assigneeId},
+            ${nextDate},
+            ${task.time},
+            ${task.repeatType},
+            ${task.repeatEvery},
+            ${task.repeatLabel},
+            false
+          )
+        `;
+      }
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }

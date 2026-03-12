@@ -7,6 +7,8 @@ type DbTask = {
   assigneeId: string;
   date: string;
   time: string | null;
+  repeatType: "none" | "daily" | "weekly" | "monthly";
+  repeatEvery: number;
   repeatLabel: string;
   done: boolean;
   completedAt: string | null;
@@ -28,6 +30,8 @@ function mapTask(task: DbTask): Task {
   return {
     ...task,
     time: task.time ?? undefined,
+    repeatType: task.repeatType,
+    repeatEvery: task.repeatEvery,
     completedAt: task.completedAt,
   };
 }
@@ -69,6 +73,8 @@ export async function readAppData(): Promise<AppData> {
       assignee_id as "assigneeId",
       task_date::text as date,
       task_time::text as time,
+      repeat_type as "repeatType",
+      repeat_every as "repeatEvery",
       repeat_label as "repeatLabel",
       done,
       completed_at::text as "completedAt"

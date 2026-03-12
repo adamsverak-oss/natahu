@@ -1,0 +1,55 @@
+/* [project]/src/app/globals.css [app-client] (css) */
+:root {
+  --lightningcss-light: initial;
+  --lightningcss-dark: ;
+  color-scheme: light;
+  --bg: #f5efe4;
+  --panel: #fffcf7e0;
+  --panel-strong: #fffdf9;
+  --ink: #18211f;
+  --muted: #5a655d;
+  --line: #18211f1f;
+  --accent: #ff7a18;
+  --accent-dark: #cf5e06;
+  --accent-soft: #ff7a181f;
+  --teal: #2d8f85;
+  --rose: #d7617d;
+  --gold: #edc15c;
+  --shadow: 0 24px 60px #412c111f;
+  --radius-xl: 28px;
+  --radius-lg: 22px;
+  --radius-md: 16px;
+  --radius-sm: 12px;
+  --font-body: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  background: radial-gradient(circle at top left, #ffb64240, transparent 28%), radial-gradient(circle at top right, #2d8f852e, transparent 24%), linear-gradient(180deg, #fbf7ef 0%, var(--bg) 100%);
+  min-height: 100%;
+  color: var(--ink);
+  font-family: var(--font-body);
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/*# sourceMappingURL=src_app_globals_91e4631d.css.map*/

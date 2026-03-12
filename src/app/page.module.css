@@ -21,6 +21,10 @@
   gap: 16px;
 }
 
+.mobileNav {
+  display: none;
+}
+
 .appLayout {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
@@ -191,11 +195,18 @@
 
 .warningBar,
 .permissionCard,
-.emptyState {
+.emptyState,
+.inlineNote,
+.statusText {
   padding: 16px 18px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px dashed rgba(24, 33, 31, 0.12);
+}
+
+.inlineNote,
+.statusText {
+  padding: 12px 14px;
 }
 
 .contentGrid {
@@ -328,6 +339,24 @@
 
 .familyGrid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.reminderGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.reminderCard {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(24, 33, 31, 0.08);
+}
+
+.reminderCard strong {
+  display: block;
+  font-size: 1.5rem;
 }
 
 .memberCard {
@@ -497,6 +526,30 @@
   .panelFull {
     grid-column: auto;
   }
+
+  .sidebar {
+    display: none;
+  }
+
+  .mobileNav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .mobileNavItem {
+    border: 1px solid rgba(24, 33, 31, 0.08);
+    border-radius: 14px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.72);
+    font-weight: 700;
+  }
+
+  .mobileNavItemActive {
+    background: linear-gradient(135deg, rgba(255, 122, 24, 0.95), rgba(255, 179, 71, 0.92));
+    color: white;
+  }
 }
 
 @media (max-width: 720px) {
@@ -545,5 +598,10 @@
 
   .familyGrid {
     grid-template-columns: 1fr;
+  }
+
+  .reminderGrid,
+  .mobileNav {
+    grid-template-columns: 1fr 1fr;
   }
 }

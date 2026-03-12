@@ -13,6 +13,8 @@ export type Task = {
   assigneeId: string;
   date: string;
   time?: string;
+  repeatType?: "none" | "daily" | "weekly" | "monthly";
+  repeatEvery?: number;
   repeatLabel: string;
   done: boolean;
   completedAt?: string | null;
