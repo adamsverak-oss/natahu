@@ -11,7 +11,8 @@ import type {
   TaskHistoryItem,
 } from "@/lib/app-data";
 import type { SessionUser } from "@/lib/types";
-import { getRepeatLabel } from "@/lib/repeat";
+import { expandRecurringDates, getRepeatLabel } from "@/lib/repeat";
+import type { RepeatType } from "@/lib/repeat";
 
 type SectionId =
   | "dashboard"
@@ -30,9 +31,14 @@ type BootstrapPayload = {
 };
 
 const chatSeenStorageKey = "natahu-chat-last-seen";
-
-type RepeatType = "none" | "daily" | "weekly" | "monthly";
 type Priority = "low" | "medium" | "high";
+
+type CalendarTaskView = Task & {
+  taskId: string;
+  projected?: boolean;
+  sourceDate: string;
+  occurrenceKey: string;
+};
 
 const emptyData: AppData = {
   members: [],
@@ -80,6 +86,19 @@ function formatDateTimeLabel(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function toIsoDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getMonthRange(date: Date) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  return {
+    start: toIsoDate(start),
+    end: toIsoDate(end),
+  };
 }
 
 function getBadgeText(text?: string) {
@@ -140,6 +159,7 @@ export default function HomePage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDate, setSelectedDate] = useState(getTodayKey());
+  const [calendarDialogDate, setCalendarDialogDate] = useState<string | null>(null);
   const [calendarFilterUserId, setCalendarFilterUserId] = useState("all");
   const [calendarFilterStatus, setCalendarFilterStatus] = useState("all");
   const [calendarFilterPriority, setCalendarFilterPriority] = useState("all");
@@ -238,12 +258,27 @@ export default function HomePage() {
     }
   }, [activeSection]);
 
+  useEffect(() => {
+    if (!calendarDialogDate || typeof window === "undefined") return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setCalendarDialogDate(null);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [calendarDialogDate]);
+
   const todayTasks = useMemo(
     () => data.tasks.filter((task) => task.date === todayKey),
     [data.tasks, todayKey]
   );
 
-  const filteredCalendarTasks = useMemo(() => {
+  const calendarMonthRange = useMemo(() => getMonthRange(calendarMonth), [calendarMonth]);
+
+  const filteredBaseTasks = useMemo(() => {
     return data.tasks.filter((task) => {
       if (calendarFilterUserId !== "all" && task.assigneeId !== calendarFilterUserId) return false;
       if (calendarFilterStatus === "done" && !task.done) return false;
@@ -252,6 +287,62 @@ export default function HomePage() {
       return true;
     });
   }, [data.tasks, calendarFilterPriority, calendarFilterStatus, calendarFilterUserId]);
+
+  const calendarTasks = useMemo(() => {
+    const taskMap = new Map<string, CalendarTaskView>();
+
+    filteredBaseTasks.forEach((task) => {
+      const makeSeriesKey = (occurrenceDate: string) =>
+        [
+          task.title,
+          task.assigneeId,
+          occurrenceDate,
+          task.time ?? "",
+          task.repeatType ?? "none",
+          String(task.repeatEvery ?? 1),
+        ].join("::");
+
+      const actualEntry: CalendarTaskView = {
+        ...task,
+        taskId: task.id,
+        sourceDate: task.date,
+        occurrenceKey: `${task.id}:${task.date}:actual`,
+      };
+
+      if (task.date >= calendarMonthRange.start && task.date <= calendarMonthRange.end) {
+        taskMap.set(makeSeriesKey(task.date), actualEntry);
+      }
+
+      if (task.repeatType && task.repeatType !== "none") {
+        const recurringDates = expandRecurringDates(
+          task.date,
+          task.repeatType,
+          task.repeatEvery || 1,
+          calendarMonthRange.start,
+          calendarMonthRange.end,
+          62
+        );
+
+        recurringDates.forEach((occurrenceDate) => {
+          const key = makeSeriesKey(occurrenceDate);
+          if (taskMap.has(key)) return;
+
+          taskMap.set(key, {
+            ...task,
+            taskId: task.id,
+            date: occurrenceDate,
+            done: occurrenceDate === task.date ? task.done : false,
+            completedAt: occurrenceDate === task.date ? task.completedAt : null,
+            projected: occurrenceDate !== task.date,
+            sourceDate: task.date,
+            occurrenceKey: `${task.id}:${occurrenceDate}:${occurrenceDate === task.date ? "actual" : "projected"}`,
+          });
+        });
+      }
+    });
+
+    return [...taskMap.values()].sort((left, right) => getTaskSortKey(left).localeCompare(getTaskSortKey(right)));
+  }, [calendarMonthRange.end, calendarMonthRange.start, filteredBaseTasks]);
 
   const upcomingTasks = useMemo(
     () =>
@@ -271,10 +362,20 @@ export default function HomePage() {
 
   const selectedDateTasks = useMemo(
     () =>
-      filteredCalendarTasks
+      calendarTasks
         .filter((task) => task.date === selectedDate)
         .sort((left, right) => getTaskSortKey(left).localeCompare(getTaskSortKey(right))),
-    [filteredCalendarTasks, selectedDate]
+    [calendarTasks, selectedDate]
+  );
+
+  const calendarDialogTasks = useMemo(
+    () =>
+      calendarDialogDate
+        ? calendarTasks
+            .filter((task) => task.date === calendarDialogDate)
+            .sort((left, right) => getTaskSortKey(left).localeCompare(getTaskSortKey(right)))
+        : [],
+    [calendarDialogDate, calendarTasks]
   );
 
   const reminderTasks = useMemo(() => {
@@ -595,12 +696,16 @@ export default function HomePage() {
     );
   }
 
-  function renderTaskCard(task: Task, options?: { showActions?: boolean }) {
+  function renderTaskCard(task: CalendarTaskView | Task, options?: { showActions?: boolean }) {
     const member = data.members.find((item) => item.id === task.assigneeId);
-    const canToggle = Boolean(activeUser && activeUser.id === task.assigneeId);
+    const projected = "projected" in task && Boolean(task.projected);
+    const canToggle = Boolean(activeUser && activeUser.id === task.assigneeId && !projected);
 
     return (
-      <div key={task.id} className={`${styles.taskCard} ${task.done ? styles.taskDone : ""}`}>
+      <div
+        key={"occurrenceKey" in task ? task.occurrenceKey : task.id}
+        className={`${styles.taskCard} ${task.done ? styles.taskDone : ""} ${projected ? styles.taskProjected : ""}`}
+      >
         <div className={styles.taskTop}>
           <div>
             <strong>{task.title}</strong>
@@ -608,6 +713,7 @@ export default function HomePage() {
               <span className={`${styles.priorityBadge} ${getPriorityClass(task.priority)}`}>
                 {priorityLabels[task.priority || "medium"]}
               </span>
+              {projected ? <span className={styles.repeatGhost}>Opakovani</span> : null}
               {member ? renderMemberPill(member.id) : null}
             </div>
           </div>
@@ -617,9 +723,9 @@ export default function HomePage() {
               onClick={() => void toggleTask(task.id)}
               disabled={!canToggle}
             >
-              {task.done ? "Vratit" : "Hotovo"}
+              {projected ? "Ceka" : task.done ? "Vratit" : "Hotovo"}
             </button>
-            {options?.showActions && canManage ? (
+            {options?.showActions && canManage && !projected ? (
               <>
                 <button className={styles.smallButton} onClick={() => beginEditTask(task)}>
                   Upravit
@@ -636,7 +742,9 @@ export default function HomePage() {
             {task.repeatLabel} · {formatDateLabel(task.date)} · {formatTimeLabel(task.time)}
           </span>
           <span>
-            {task.done
+            {projected
+              ? "Opakovany termin se zobrazuje dopredu"
+              : task.done
               ? "Splneno"
               : canToggle
                 ? "Muzes odskrtnout"
@@ -1022,7 +1130,7 @@ export default function HomePage() {
           <div className={styles.calendarGrid}>
             {cells.map((cell) => {
               if (!cell.date) return <div key={cell.key} className={styles.calendarCellEmpty} />;
-              const tasksForDay = filteredCalendarTasks
+              const tasksForDay = calendarTasks
                 .filter((task) => task.date === cell.date)
                 .sort((left, right) => getTaskSortKey(left).localeCompare(getTaskSortKey(right)));
               const isSelected = selectedDate === cell.date;
@@ -1031,7 +1139,10 @@ export default function HomePage() {
                 <button
                   key={cell.key}
                   className={`${styles.calendarCell} ${isSelected ? styles.calendarCellSelected : ""} ${isToday ? styles.calendarCellToday : ""}`}
-                  onClick={() => setSelectedDate(cell.date!)}
+                  onClick={() => {
+                    setSelectedDate(cell.date!);
+                    setCalendarDialogDate(cell.date!);
+                  }}
                 >
                   <div className={styles.calendarCellTop}>
                     <strong>{cell.dayNumber}</strong>
@@ -1074,6 +1185,43 @@ export default function HomePage() {
           </div>
         </article>
       </section>
+    );
+  }
+
+  function renderCalendarDialog() {
+    if (!calendarDialogDate) return null;
+
+    return (
+      <div className={styles.modalOverlay} onClick={() => setCalendarDialogDate(null)}>
+        <div className={styles.modalCard} onClick={(event) => event.stopPropagation()}>
+          <div className={styles.modalHeader}>
+            <div>
+              <span className={styles.sectionTag}>Detail dne</span>
+              <h2>{formatDateLabel(calendarDialogDate)}</h2>
+            </div>
+            <button className={styles.secondaryButton} onClick={() => setCalendarDialogDate(null)}>
+              Zavrit
+            </button>
+          </div>
+
+          <div className={styles.modalInfoStrip}>
+            <span>{calendarDialogTasks.length} ukolu</span>
+            <span>
+              {calendarDialogTasks.some((task) => "projected" in task && task.projected)
+                ? "Vcetne opakovanych terminu"
+                : "Vsechny detaily na jednom miste"}
+            </span>
+          </div>
+
+          <div className={styles.modalTaskList}>
+            {calendarDialogTasks.length === 0 ? (
+              <div className={styles.emptyState}>Na tenhle den zatim nic neni.</div>
+            ) : (
+              calendarDialogTasks.map((task) => renderTaskCard(task, { showActions: true }))
+            )}
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -1461,6 +1609,7 @@ export default function HomePage() {
           {activeSection === "notes" ? renderNotesSection() : null}
           {activeSection === "chat" ? renderChat() : null}
           {activeSection === "admin" ? renderAdmin() : null}
+          {activeSection === "calendar" ? renderCalendarDialog() : null}
         </section>
       </div>
     </main>
