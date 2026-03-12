@@ -2,7 +2,14 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
-import type { AppData, Task } from "@/lib/app-data";
+import type {
+  AppData,
+  ChatMessage,
+  HouseholdNote,
+  ShoppingItem,
+  Task,
+  TaskHistoryItem,
+} from "@/lib/app-data";
 import type { SessionUser } from "@/lib/types";
 import { getRepeatLabel } from "@/lib/repeat";
 
@@ -13,6 +20,8 @@ type SectionId =
   | "shopping"
   | "mine"
   | "reminders"
+  | "notes"
+  | "chat"
   | "admin";
 
 type BootstrapPayload = {
@@ -20,20 +29,23 @@ type BootstrapPayload = {
   data: AppData;
 };
 
+type RepeatType = "none" | "daily" | "weekly" | "monthly";
+type Priority = "low" | "medium" | "high";
+
 const emptyData: AppData = {
   members: [],
   tasks: [],
   shoppingItems: [],
+  taskHistory: [],
+  householdNotes: [],
+  chatMessages: [],
 };
 
-const baseSections: Array<{ id: Exclude<SectionId, "admin">; label: string; hint: string }> = [
-  { id: "dashboard", label: "Prehled", hint: "Dnesek a rychle akce" },
-  { id: "calendar", label: "Kalendar", hint: "Vsechny terminy" },
-  { id: "family", label: "Rodina", hint: "Mesicni statistiky" },
-  { id: "shopping", label: "Nakupy", hint: "Spolecny seznam" },
-  { id: "mine", label: "Moje ukoly", hint: "Jen moje povinnosti" },
-  { id: "reminders", label: "Pripominky", hint: "Co hori a co se blizi" },
-];
+const priorityLabels: Record<Priority, string> = {
+  low: "Nizka",
+  medium: "Stredni",
+  high: "Vysoka",
+};
 
 function getTodayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -59,57 +71,100 @@ function formatTimeLabel(time?: string) {
   return time || "Bez casu";
 }
 
-function getInitials(name: string) {
-  return name.slice(0, 2).toUpperCase();
+function formatDateTimeLabel(value: string) {
+  return new Intl.DateTimeFormat("cs-CZ", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
-function getCompletedCount(memberId: string, tasks: Task[]) {
-  const monthKey = getCurrentMonthKey();
-  return tasks.filter(
-    (task) => task.assigneeId === memberId && task.done && task.completedAt?.startsWith(monthKey)
-  ).length;
+function getBadgeText(text?: string) {
+  return (text || "NA").slice(0, 2).toUpperCase();
 }
 
 function getTaskSortKey(task: Task) {
   return `${task.date}-${task.time ?? "99:99"}-${task.title}`;
 }
 
+function getMonthlyPoints(memberId: string, history: TaskHistoryItem[]) {
+  const monthKey = getCurrentMonthKey();
+  return history.filter((item) => item.assigneeId === memberId && item.completedAt.startsWith(monthKey)).length;
+}
+
+function getPriorityClass(priority?: Priority) {
+  if (priority === "high") return styles.priorityHigh;
+  if (priority === "low") return styles.priorityLow;
+  return styles.priorityMedium;
+}
+
 export default function HomePage() {
   const [data, setData] = useState<AppData>(emptyData);
   const [activeUser, setActiveUser] = useState<SessionUser | null>(null);
   const [activeSection, setActiveSection] = useState<SectionId>("dashboard");
-  const [bootstrapError, setBootstrapError] = useState("");
-  const [loginError, setLoginError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [taskTitle, setTaskTitle] = useState("");
-  const [taskAssigneeId, setTaskAssigneeId] = useState("");
-  const [taskDate, setTaskDate] = useState(getTodayKey());
-  const [taskTime, setTaskTime] = useState("18:00");
-  const [repeatType, setRepeatType] = useState<"none" | "daily" | "weekly" | "monthly">("none");
-  const [repeatEvery, setRepeatEvery] = useState("1");
-  const [shoppingTitle, setShoppingTitle] = useState("");
-  const [shoppingAssigneeId, setShoppingAssigneeId] = useState("");
+  const [bootstrapError, setBootstrapError] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [adminMessage, setAdminMessage] = useState("");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+  const [taskForm, setTaskForm] = useState({
+    title: "",
+    notes: "",
+    assigneeId: "",
+    date: getTodayKey(),
+    time: "18:00",
+    priority: "medium" as Priority,
+    repeatType: "none" as RepeatType,
+    repeatEvery: "1",
+  });
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+
+  const [shoppingForm, setShoppingForm] = useState({
+    title: "",
+    notes: "",
+    assigneeId: "",
+    repeatType: "none" as RepeatType,
+    repeatEvery: "1",
+  });
+  const [editingShoppingId, setEditingShoppingId] = useState<string | null>(null);
+
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDate, setSelectedDate] = useState(getTodayKey());
   const [calendarFilterUserId, setCalendarFilterUserId] = useState("all");
+  const [calendarFilterStatus, setCalendarFilterStatus] = useState("all");
+  const [calendarFilterPriority, setCalendarFilterPriority] = useState("all");
+
   const [adminUserId, setAdminUserId] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [adminMessage, setAdminMessage] = useState("");
+  const [memberColor, setMemberColor] = useState("#ff7a18");
+  const [memberAvatar, setMemberAvatar] = useState("AD");
+
+  const [noteBody, setNoteBody] = useState("");
+  const [chatBody, setChatBody] = useState("");
 
   const canManage = activeUser?.canManage ?? false;
   const todayKey = getTodayKey();
-  const sections = canManage
-    ? [...baseSections, { id: "admin" as const, label: "Admin", hint: "Hesla a sprava" }]
-    : baseSections;
+
+  const sections = [
+    { id: "dashboard" as const, label: "Prehled", hint: "Dnes a rychle akce" },
+    { id: "calendar" as const, label: "Kalendar", hint: "Filtry a terminy" },
+    { id: "family" as const, label: "Rodina", hint: "Body a zebricek" },
+    { id: "shopping" as const, label: "Nakupy", hint: "Seznam a opakovani" },
+    { id: "mine" as const, label: "Moje ukoly", hint: "Jen moje veci" },
+    { id: "reminders" as const, label: "Pripominky", hint: "Co hori a co se blizi" },
+    { id: "notes" as const, label: "Domov", hint: "Poznamky pro domacnost" },
+    { id: "chat" as const, label: "Chat", hint: "Rodinna komunikace" },
+    ...(canManage ? [{ id: "admin" as const, label: "Admin", hint: "Hesla a profily" }] : []),
+  ];
 
   async function loadBootstrap(showLoading = false) {
-    if (showLoading) {
-      setLoading(true);
-    }
+    if (showLoading) setLoading(true);
 
     try {
       const response = await fetch("/api/bootstrap", {
@@ -135,9 +190,20 @@ export default function HomePage() {
       const payload = (await response.json()) as BootstrapPayload;
       setActiveUser(payload.user);
       setData(payload.data);
-      setTaskAssigneeId((current) => current || payload.data.members[0]?.id || "");
-      setShoppingAssigneeId((current) => current || payload.data.members[0]?.id || "");
+      setTaskForm((current) => ({
+        ...current,
+        assigneeId: current.assigneeId || payload.data.members[0]?.id || "",
+      }));
+      setShoppingForm((current) => ({
+        ...current,
+        assigneeId: current.assigneeId || payload.data.members[0]?.id || "",
+      }));
+      const defaultMember = payload.data.members.find((member) => member.id === (adminUserId || payload.data.members[0]?.id));
       setAdminUserId((current) => current || payload.data.members[0]?.id || "");
+      if (defaultMember) {
+        setMemberColor(defaultMember.color);
+        setMemberAvatar(defaultMember.avatar || getBadgeText(defaultMember.name));
+      }
       setBootstrapError("");
       setLoading(false);
     } catch {
@@ -150,10 +216,25 @@ export default function HomePage() {
     void loadBootstrap(true);
   }, []);
 
+  useEffect(() => {
+    if (!activeUser || typeof window === "undefined") return;
+    setNotificationsEnabled("Notification" in window && Notification.permission === "granted");
+  }, [activeUser]);
+
   const todayTasks = useMemo(
     () => data.tasks.filter((task) => task.date === todayKey),
     [data.tasks, todayKey]
   );
+
+  const filteredCalendarTasks = useMemo(() => {
+    return data.tasks.filter((task) => {
+      if (calendarFilterUserId !== "all" && task.assigneeId !== calendarFilterUserId) return false;
+      if (calendarFilterStatus === "done" && !task.done) return false;
+      if (calendarFilterStatus === "open" && task.done) return false;
+      if (calendarFilterPriority !== "all" && task.priority !== calendarFilterPriority) return false;
+      return true;
+    });
+  }, [data.tasks, calendarFilterPriority, calendarFilterStatus, calendarFilterUserId]);
 
   const upcomingTasks = useMemo(
     () =>
@@ -173,10 +254,10 @@ export default function HomePage() {
 
   const selectedDateTasks = useMemo(
     () =>
-      data.tasks
+      filteredCalendarTasks
         .filter((task) => task.date === selectedDate)
         .sort((left, right) => getTaskSortKey(left).localeCompare(getTaskSortKey(right))),
-    [data.tasks, selectedDate]
+    [filteredCalendarTasks, selectedDate]
   );
 
   const reminderTasks = useMemo(() => {
@@ -188,27 +269,51 @@ export default function HomePage() {
     };
   }, [activeUser?.id, data.tasks, todayKey]);
 
+  const leaderboard = useMemo(
+    () =>
+      [...data.members]
+        .map((member) => ({
+          ...member,
+          points: getMonthlyPoints(member.id, data.taskHistory),
+        }))
+        .sort((left, right) => right.points - left.points),
+    [data.members, data.taskHistory]
+  );
+
   const memberOnDuty = todayTasks[0]
     ? data.members.find((member) => member.id === todayTasks[0].assigneeId) ?? null
     : null;
 
+  useEffect(() => {
+    if (!activeUser || !notificationsEnabled || typeof window === "undefined") return;
+
+    const storageKey = `natahu-notify-${activeUser.id}-${todayKey}`;
+    if (window.localStorage.getItem(storageKey)) return;
+
+    const count = reminderTasks.overdue.length + reminderTasks.today.length;
+    if (count > 0) {
+      new Notification("NaTahu", {
+        body:
+          reminderTasks.overdue.length > 0
+            ? `Mas ${reminderTasks.overdue.length} ukolu po terminu a ${reminderTasks.today.length} na dnesek.`
+            : `Mas ${reminderTasks.today.length} ukolu na dnesek.`,
+      });
+      window.localStorage.setItem(storageKey, "1");
+    }
+  }, [activeUser, notificationsEnabled, reminderTasks, todayKey]);
+
   async function runMutation(url: string, body?: object) {
     setSaving(true);
-
     const response = await fetch(url, {
       method: "POST",
       credentials: "include",
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });
-
     setSaving(false);
 
     if (!response.ok) {
-      if (response.status === 401) {
-        await loadBootstrap();
-      }
-
+      if (response.status === 401) await loadBootstrap();
       throw new Error("Request failed");
     }
 
@@ -248,60 +353,140 @@ export default function HomePage() {
     setActiveSection("dashboard");
   }
 
-  async function toggleTask(taskId: string) {
-    if (!activeUser) {
-      return;
-    }
+  async function enableNotifications() {
+    if (!("Notification" in window)) return;
+    const result = await Notification.requestPermission();
+    setNotificationsEnabled(result === "granted");
+  }
 
+  async function toggleTask(taskId: string) {
+    if (!activeUser) return;
     try {
       await runMutation(`/api/tasks/${taskId}/toggle`);
     } catch {}
   }
 
   async function toggleShoppingItem(itemId: string) {
-    if (!activeUser) {
-      return;
-    }
-
+    if (!activeUser) return;
     try {
       await runMutation(`/api/shopping/${itemId}/toggle`);
     } catch {}
   }
 
-  async function addTask(event: FormEvent<HTMLFormElement>) {
+  function beginEditTask(task: Task) {
+    setEditingTaskId(task.id);
+    setTaskForm({
+      title: task.title,
+      notes: task.notes || "",
+      assigneeId: task.assigneeId,
+      date: task.date,
+      time: task.time || "18:00",
+      priority: task.priority || "medium",
+      repeatType: task.repeatType || "none",
+      repeatEvery: String(task.repeatEvery || 1),
+    });
+    setActiveSection("mine");
+  }
+
+  function clearTaskForm() {
+    setEditingTaskId(null);
+    setTaskForm({
+      title: "",
+      notes: "",
+      assigneeId: data.members[0]?.id || "",
+      date: getTodayKey(),
+      time: "18:00",
+      priority: "medium",
+      repeatType: "none",
+      repeatEvery: "1",
+    });
+  }
+
+  async function saveTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!activeUser || !canManage || !taskTitle.trim() || !taskAssigneeId) {
-      return;
-    }
+    if (!activeUser || !canManage || !taskForm.title.trim() || !taskForm.assigneeId) return;
+
+    const payload = {
+      title: taskForm.title.trim(),
+      notes: taskForm.notes.trim(),
+      assigneeId: taskForm.assigneeId,
+      date: taskForm.date,
+      time: taskForm.time || null,
+      priority: taskForm.priority,
+      repeatType: taskForm.repeatType,
+      repeatEvery: Number.parseInt(taskForm.repeatEvery, 10) || 1,
+    };
 
     try {
-      await runMutation("/api/tasks", {
-        title: taskTitle.trim(),
-        assigneeId: taskAssigneeId,
-        date: taskDate,
-        time: taskTime || null,
-        repeatType,
-        repeatEvery: Number.parseInt(repeatEvery, 10) || 1,
-      });
-      setTaskTitle("");
-      setTaskTime("18:00");
-      setRepeatType("none");
-      setRepeatEvery("1");
+      if (editingTaskId) {
+        await runMutation(`/api/tasks/${editingTaskId}/update`, payload);
+      } else {
+        await runMutation("/api/tasks", payload);
+      }
+      clearTaskForm();
     } catch {}
   }
 
-  async function addShoppingItem(event: FormEvent<HTMLFormElement>) {
+  async function deleteTask(taskId: string) {
+    if (!canManage) return;
+    if (!window.confirm("Opravdu chces tenhle ukol smazat?")) return;
+    try {
+      await runMutation(`/api/tasks/${taskId}/delete`);
+      if (editingTaskId === taskId) clearTaskForm();
+    } catch {}
+  }
+
+  function beginEditShopping(item: ShoppingItem) {
+    setEditingShoppingId(item.id);
+    setShoppingForm({
+      title: item.title,
+      notes: item.notes || "",
+      assigneeId: item.assigneeId,
+      repeatType: item.repeatType || "none",
+      repeatEvery: String(item.repeatEvery || 1),
+    });
+    setActiveSection("shopping");
+  }
+
+  function clearShoppingForm() {
+    setEditingShoppingId(null);
+    setShoppingForm({
+      title: "",
+      notes: "",
+      assigneeId: data.members[0]?.id || "",
+      repeatType: "none",
+      repeatEvery: "1",
+    });
+  }
+
+  async function saveShopping(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!activeUser || !canManage || !shoppingTitle.trim() || !shoppingAssigneeId) {
-      return;
-    }
+    if (!activeUser || !canManage || !shoppingForm.title.trim() || !shoppingForm.assigneeId) return;
+
+    const payload = {
+      title: shoppingForm.title.trim(),
+      notes: shoppingForm.notes.trim(),
+      assigneeId: shoppingForm.assigneeId,
+      repeatType: shoppingForm.repeatType,
+      repeatEvery: Number.parseInt(shoppingForm.repeatEvery, 10) || 1,
+    };
 
     try {
-      await runMutation("/api/shopping", {
-        title: shoppingTitle.trim(),
-        assigneeId: shoppingAssigneeId,
-      });
-      setShoppingTitle("");
+      if (editingShoppingId) {
+        await runMutation(`/api/shopping/${editingShoppingId}/update`, payload);
+      } else {
+        await runMutation("/api/shopping", payload);
+      }
+      clearShoppingForm();
+    } catch {}
+  }
+
+  async function deleteShopping(itemId: string) {
+    if (!canManage) return;
+    if (!window.confirm("Opravdu chces tuhle polozku smazat?")) return;
+    try {
+      await runMutation(`/api/shopping/${itemId}/delete`);
+      if (editingShoppingId === itemId) clearShoppingForm();
     } catch {}
   }
 
@@ -324,24 +509,92 @@ export default function HomePage() {
     }
   }
 
-  function renderTaskCard(task: Task) {
+  async function saveMemberProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canManage || !adminUserId) return;
+    try {
+      await runMutation("/api/admin/member", {
+        userId: adminUserId,
+        color: memberColor,
+        avatar: memberAvatar,
+      });
+      setAdminMessage("Profil clena byl upraven.");
+    } catch {
+      setAdminMessage("Profil se nepodarilo ulozit.");
+    }
+  }
+
+  async function addHouseholdNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!noteBody.trim()) return;
+    try {
+      await runMutation("/api/notes", { body: noteBody.trim() });
+      setNoteBody("");
+    } catch {}
+  }
+
+  async function sendChatMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!chatBody.trim()) return;
+    try {
+      await runMutation("/api/chat", { body: chatBody.trim() });
+      setChatBody("");
+    } catch {}
+  }
+
+  function renderMemberPill(memberId: string) {
+    const member = data.members.find((item) => item.id === memberId);
+    if (!member) return null;
+
+    return (
+      <span className={styles.memberPill} style={{ borderColor: member.color }}>
+        <span className={styles.memberPillAvatar} style={{ backgroundColor: member.color }}>
+          {member.avatar || getBadgeText(member.name)}
+        </span>
+        {member.name}
+      </span>
+    );
+  }
+
+  function renderTaskCard(task: Task, options?: { showActions?: boolean }) {
     const member = data.members.find((item) => item.id === task.assigneeId);
     const canToggle = Boolean(activeUser && activeUser.id === task.assigneeId);
 
     return (
-      <button
-        key={task.id}
-        className={`${styles.taskCard} ${task.done ? styles.taskDone : ""} ${!canToggle ? styles.taskLocked : ""}`}
-        onClick={() => void toggleTask(task.id)}
-        disabled={!canToggle}
-      >
+      <div key={task.id} className={`${styles.taskCard} ${task.done ? styles.taskDone : ""}`}>
         <div className={styles.taskTop}>
-          <strong>{task.title}</strong>
-          <span style={{ color: member?.color }}>{member?.name}</span>
+          <div>
+            <strong>{task.title}</strong>
+            <div className={styles.taskBadges}>
+              <span className={`${styles.priorityBadge} ${getPriorityClass(task.priority)}`}>
+                {priorityLabels[task.priority || "medium"]}
+              </span>
+              {member ? renderMemberPill(member.id) : null}
+            </div>
+          </div>
+          <div className={styles.taskActions}>
+            <button
+              className={styles.smallButton}
+              onClick={() => void toggleTask(task.id)}
+              disabled={!canToggle}
+            >
+              {task.done ? "Vratit" : "Hotovo"}
+            </button>
+            {options?.showActions && canManage ? (
+              <>
+                <button className={styles.smallButton} onClick={() => beginEditTask(task)}>
+                  Upravit
+                </button>
+                <button className={styles.smallDanger} onClick={() => void deleteTask(task.id)}>
+                  Smazat
+                </button>
+              </>
+            ) : null}
+          </div>
         </div>
         <div className={styles.taskMeta}>
           <span>
-            {task.repeatLabel} · {formatTimeLabel(task.time)}
+            {task.repeatLabel} · {formatDateLabel(task.date)} · {formatTimeLabel(task.time)}
           </span>
           <span>
             {task.done
@@ -351,42 +604,182 @@ export default function HomePage() {
                 : "Muze odskrtnout jen prirazeny clovek"}
           </span>
         </div>
-      </button>
+        {task.notes ? <div className={styles.taskNotes}>{task.notes}</div> : null}
+      </div>
     );
   }
 
-  function renderRemindersPanel(compact = false) {
+  function renderShoppingCard(item: ShoppingItem) {
+    const member = data.members.find((entry) => entry.id === item.assigneeId);
+
     return (
-      <article className={`${styles.panel} ${compact ? "" : styles.panelFull}`}>
-        <div className={styles.panelHeader}>
+      <div key={item.id} className={`${styles.shoppingItem} ${item.done ? styles.taskDone : ""}`}>
+        <div className={styles.taskTop}>
           <div>
-            <span className={styles.sectionTag}>Pripominky</span>
-            <h2>Co je potreba hlidat</h2>
+            <strong>{item.title}</strong>
+            <div className={styles.taskBadges}>{member ? renderMemberPill(member.id) : null}</div>
+          </div>
+          <div className={styles.taskActions}>
+            <button className={styles.smallButton} onClick={() => void toggleShoppingItem(item.id)}>
+              {item.done ? "Vratit" : "Koupeno"}
+            </button>
+            {canManage ? (
+              <>
+                <button className={styles.smallButton} onClick={() => beginEditShopping(item)}>
+                  Upravit
+                </button>
+                <button className={styles.smallDanger} onClick={() => void deleteShopping(item.id)}>
+                  Smazat
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
-        <div className={styles.reminderGrid}>
-          <div className={styles.reminderCard}>
-            <strong>{reminderTasks.overdue.length}</strong>
-            <span>po terminu</span>
-          </div>
-          <div className={styles.reminderCard}>
-            <strong>{reminderTasks.today.length}</strong>
-            <span>na dnesek</span>
-          </div>
-          <div className={styles.reminderCard}>
-            <strong>{reminderTasks.upcoming.length}</strong>
-            <span>blizi se</span>
-          </div>
+        <div className={styles.taskMeta}>
+          <span>{getRepeatLabel(item.repeatType || "none", item.repeatEvery || 1)}</span>
         </div>
-        <div className={styles.taskList}>
-          {[...reminderTasks.overdue, ...reminderTasks.today, ...reminderTasks.upcoming]
-            .slice(0, compact ? 3 : 8)
-            .map(renderTaskCard)}
-          {reminderTasks.overdue.length + reminderTasks.today.length + reminderTasks.upcoming.length === 0 ? (
-            <div className={styles.emptyState}>Zadne pripominky. Vypada to, ze mas cisto.</div>
+        {item.notes ? <div className={styles.taskNotes}>{item.notes}</div> : null}
+      </div>
+    );
+  }
+
+  function renderTaskForm() {
+    return (
+      <form className={styles.formStack} onSubmit={(event) => void saveTask(event)}>
+        <input
+          value={taskForm.title}
+          onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))}
+          placeholder="Treba umyt nadobi"
+        />
+        <textarea
+          className={styles.textarea}
+          value={taskForm.notes}
+          onChange={(event) => setTaskForm((current) => ({ ...current, notes: event.target.value }))}
+          placeholder="Poznamka k ukolu"
+        />
+        <div className={styles.twoCols}>
+          <select
+            value={taskForm.assigneeId}
+            onChange={(event) => setTaskForm((current) => ({ ...current, assigneeId: event.target.value }))}
+          >
+            {data.members.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={taskForm.priority}
+            onChange={(event) => setTaskForm((current) => ({ ...current, priority: event.target.value as Priority }))}
+          >
+            <option value="low">Nizka priorita</option>
+            <option value="medium">Stredni priorita</option>
+            <option value="high">Vysoka priorita</option>
+          </select>
+        </div>
+        <div className={styles.twoCols}>
+          <input
+            type="date"
+            value={taskForm.date}
+            onChange={(event) => setTaskForm((current) => ({ ...current, date: event.target.value }))}
+          />
+          <input
+            type="time"
+            value={taskForm.time}
+            onChange={(event) => setTaskForm((current) => ({ ...current, time: event.target.value }))}
+          />
+        </div>
+        <div className={styles.twoCols}>
+          <select
+            value={taskForm.repeatType}
+            onChange={(event) => setTaskForm((current) => ({ ...current, repeatType: event.target.value as RepeatType }))}
+          >
+            <option value="none">Jednou</option>
+            <option value="daily">Kazdy den</option>
+            <option value="weekly">Kazdy tyden</option>
+            <option value="monthly">Kazdy mesic</option>
+          </select>
+          <input
+            type="number"
+            min="1"
+            value={taskForm.repeatEvery}
+            onChange={(event) => setTaskForm((current) => ({ ...current, repeatEvery: event.target.value }))}
+          />
+        </div>
+        <div className={styles.inlineNote}>
+          {getRepeatLabel(taskForm.repeatType, Number.parseInt(taskForm.repeatEvery, 10) || 1)}
+        </div>
+        <div className={styles.actionRow}>
+          <button className={styles.primaryButton} type="submit">
+            {editingTaskId ? "Ulozit zmeny" : "Pridat povinnost"}
+          </button>
+          {editingTaskId ? (
+            <button className={styles.secondaryButton} type="button" onClick={clearTaskForm}>
+              Zrusit upravu
+            </button>
           ) : null}
         </div>
-      </article>
+      </form>
+    );
+  }
+
+  function renderShoppingForm() {
+    return (
+      <form className={styles.formStack} onSubmit={(event) => void saveShopping(event)}>
+        <input
+          value={shoppingForm.title}
+          onChange={(event) => setShoppingForm((current) => ({ ...current, title: event.target.value }))}
+          placeholder="Treba testoviny"
+        />
+        <textarea
+          className={styles.textarea}
+          value={shoppingForm.notes}
+          onChange={(event) => setShoppingForm((current) => ({ ...current, notes: event.target.value }))}
+          placeholder="Poznamka k nakupu"
+        />
+        <div className={styles.twoCols}>
+          <select
+            value={shoppingForm.assigneeId}
+            onChange={(event) => setShoppingForm((current) => ({ ...current, assigneeId: event.target.value }))}
+          >
+            {data.members.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={shoppingForm.repeatType}
+            onChange={(event) => setShoppingForm((current) => ({ ...current, repeatType: event.target.value as RepeatType }))}
+          >
+            <option value="none">Jednou</option>
+            <option value="daily">Kazdy den</option>
+            <option value="weekly">Kazdy tyden</option>
+            <option value="monthly">Kazdy mesic</option>
+          </select>
+        </div>
+        <div className={styles.twoCols}>
+          <input
+            type="number"
+            min="1"
+            value={shoppingForm.repeatEvery}
+            onChange={(event) => setShoppingForm((current) => ({ ...current, repeatEvery: event.target.value }))}
+          />
+          <div className={styles.inlineNote}>
+            {getRepeatLabel(shoppingForm.repeatType, Number.parseInt(shoppingForm.repeatEvery, 10) || 1)}
+          </div>
+        </div>
+        <div className={styles.actionRow}>
+          <button className={styles.primaryButton} type="submit">
+            {editingShoppingId ? "Ulozit polozku" : "Pridat nakup"}
+          </button>
+          {editingShoppingId ? (
+            <button className={styles.secondaryButton} type="button" onClick={clearShoppingForm}>
+              Zrusit upravu
+            </button>
+          ) : null}
+        </div>
+      </form>
     );
   }
 
@@ -402,11 +795,7 @@ export default function HomePage() {
             <span className={styles.datePill}>{formatDateLabel(todayKey)}</span>
           </div>
           <div className={styles.taskList}>
-            {todayTasks.length === 0 ? (
-              <div className={styles.emptyState}>Zatim tu nejsou zadne povinnosti na dnesek.</div>
-            ) : (
-              todayTasks.map(renderTaskCard)
-            )}
+            {todayTasks.length === 0 ? <div className={styles.emptyState}>Zatim tu nejsou zadne povinnosti na dnesek.</div> : todayTasks.map((task) => renderTaskCard(task))}
           </div>
         </article>
 
@@ -418,7 +807,7 @@ export default function HomePage() {
             </div>
             {memberOnDuty ? (
               <div className={styles.memberBadge} style={{ backgroundColor: memberOnDuty.color }}>
-                {getInitials(memberOnDuty.name)}
+                {memberOnDuty.avatar || getBadgeText(memberOnDuty.name)}
               </div>
             ) : null}
           </div>
@@ -429,8 +818,8 @@ export default function HomePage() {
           </p>
           <div className={styles.scoreRow}>
             <div>
-              <strong>{memberOnDuty ? getCompletedCount(memberOnDuty.id, data.tasks) : 0}</strong>
-              <span>splneno tento mesic</span>
+              <strong>{memberOnDuty ? getMonthlyPoints(memberOnDuty.id, data.taskHistory) : 0}</strong>
+              <span>body tento mesic</span>
             </div>
             <div>
               <strong>{todayTasks.length}</strong>
@@ -443,55 +832,10 @@ export default function HomePage() {
           <div className={styles.panelHeader}>
             <div>
               <span className={styles.sectionTag}>Pridani</span>
-              <h2>Novy ukol</h2>
+              <h2>{editingTaskId ? "Uprava ukolu" : "Novy ukol"}</h2>
             </div>
           </div>
-          {canManage ? (
-            <form className={styles.formStack} onSubmit={(event) => void addTask(event)}>
-              <input
-                value={taskTitle}
-                onChange={(event) => setTaskTitle(event.target.value)}
-                placeholder="Treba umyt nadobi"
-              />
-              <div className={styles.twoCols}>
-                <select value={taskAssigneeId} onChange={(event) => setTaskAssigneeId(event.target.value)}>
-                  {data.members.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.name}
-                    </option>
-                  ))}
-                </select>
-                <input type="date" value={taskDate} onChange={(event) => setTaskDate(event.target.value)} />
-              </div>
-              <div className={styles.twoCols}>
-                <input type="time" value={taskTime} onChange={(event) => setTaskTime(event.target.value)} />
-                <select value={repeatType} onChange={(event) => setRepeatType(event.target.value as typeof repeatType)}>
-                  <option value="none">Jednou</option>
-                  <option value="daily">Kazdy den</option>
-                  <option value="weekly">Kazdy tyden</option>
-                  <option value="monthly">Kazdy mesic</option>
-                </select>
-              </div>
-              <div className={styles.twoCols}>
-                <input
-                  type="number"
-                  min="1"
-                  value={repeatEvery}
-                  onChange={(event) => setRepeatEvery(event.target.value)}
-                />
-                <div className={styles.inlineNote}>
-                  {getRepeatLabel(repeatType, Number.parseInt(repeatEvery, 10) || 1)}
-                </div>
-              </div>
-              <button className={styles.primaryButton} type="submit">
-                Pridat povinnost
-              </button>
-            </form>
-          ) : (
-            <div className={styles.permissionCard}>
-              Daniel muze ukoly plnit, ale nepridava je.
-            </div>
-          )}
+          {canManage ? renderTaskForm() : <div className={styles.permissionCard}>Daniel muze ukoly plnit, ale nepridava je.</div>}
         </article>
 
         <article className={styles.panel}>
@@ -512,9 +856,7 @@ export default function HomePage() {
                     <div className={styles.timelineDot} style={{ backgroundColor: member?.color }} />
                     <div>
                       <strong>{task.title}</strong>
-                      <p>
-                        {formatDateLabel(task.date)} · {formatTimeLabel(task.time)} · {member?.name}
-                      </p>
+                      <p>{formatDateLabel(task.date)} · {formatTimeLabel(task.time)} · {member?.name}</p>
                     </div>
                   </div>
                 );
@@ -528,6 +870,44 @@ export default function HomePage() {
     );
   }
 
+  function renderRemindersPanel(compact = false) {
+    const items = [...reminderTasks.overdue, ...reminderTasks.today, ...reminderTasks.upcoming];
+    return (
+      <article className={`${styles.panel} ${compact ? "" : styles.panelFull}`}>
+        <div className={styles.panelHeader}>
+          <div>
+            <span className={styles.sectionTag}>Pripominky</span>
+            <h2>Co je potreba hlidat</h2>
+          </div>
+          {!notificationsEnabled ? (
+            <button className={styles.secondaryButton} onClick={() => void enableNotifications()}>
+              Zapnout web notifikace
+            </button>
+          ) : (
+            <span className={styles.statusText}>Web notifikace aktivni</span>
+          )}
+        </div>
+        <div className={styles.reminderGrid}>
+          <div className={styles.reminderCard}>
+            <strong>{reminderTasks.overdue.length}</strong>
+            <span>po terminu</span>
+          </div>
+          <div className={styles.reminderCard}>
+            <strong>{reminderTasks.today.length}</strong>
+            <span>na dnesek</span>
+          </div>
+          <div className={styles.reminderCard}>
+            <strong>{reminderTasks.upcoming.length}</strong>
+            <span>blizi se</span>
+          </div>
+        </div>
+        <div className={styles.taskList}>
+          {items.length === 0 ? <div className={styles.emptyState}>Zadne pripominky. Vypada to, ze mas cisto.</div> : items.slice(0, compact ? 3 : 8).map((task) => renderTaskCard(task))}
+        </div>
+      </article>
+    );
+  }
+
   function renderCalendar() {
     const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
     const monthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
@@ -538,16 +918,11 @@ export default function HomePage() {
     for (let index = 0; index < startOffset; index += 1) {
       cells.push({ key: `empty-start-${index}`, date: null });
     }
-
     for (let day = 1; day <= daysInMonth; day += 1) {
       const date = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day);
-      const iso = date.toISOString().slice(0, 10);
-      cells.push({ key: iso, date: iso, dayNumber: day });
+      cells.push({ key: date.toISOString(), date: date.toISOString().slice(0, 10), dayNumber: day });
     }
-
-    while (cells.length % 7 !== 0) {
-      cells.push({ key: `empty-end-${cells.length}`, date: null });
-    }
+    while (cells.length % 7 !== 0) cells.push({ key: `empty-end-${cells.length}`, date: null });
 
     return (
       <section className={styles.singleSection}>
@@ -559,24 +934,29 @@ export default function HomePage() {
             </div>
           </div>
           <div className={styles.calendarToolbar}>
-            <button
-              className={styles.secondaryButton}
-              onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}
-            >
+            <button className={styles.secondaryButton} onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}>
               Predchozi
             </button>
             <strong className={styles.calendarTitle}>{getMonthLabel(calendarMonth)}</strong>
             <div className={styles.calendarActions}>
-              <select
-                value={calendarFilterUserId}
-                onChange={(event) => setCalendarFilterUserId(event.target.value)}
-              >
+              <select value={calendarFilterUserId} onChange={(event) => setCalendarFilterUserId(event.target.value)}>
                 <option value="all">Vsichni</option>
                 {data.members.map((member) => (
                   <option key={member.id} value={member.id}>
                     {member.name}
                   </option>
                 ))}
+              </select>
+              <select value={calendarFilterStatus} onChange={(event) => setCalendarFilterStatus(event.target.value)}>
+                <option value="all">Vse</option>
+                <option value="open">Jen otevrene</option>
+                <option value="done">Jen hotove</option>
+              </select>
+              <select value={calendarFilterPriority} onChange={(event) => setCalendarFilterPriority(event.target.value)}>
+                <option value="all">Vsechny priority</option>
+                <option value="high">Jen vysoka</option>
+                <option value="medium">Jen stredni</option>
+                <option value="low">Jen nizka</option>
               </select>
               <button
                 className={styles.secondaryButton}
@@ -588,10 +968,7 @@ export default function HomePage() {
               >
                 Dnes
               </button>
-              <button
-                className={styles.secondaryButton}
-                onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
-              >
+              <button className={styles.secondaryButton} onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}>
                 Dalsi
               </button>
             </div>
@@ -605,17 +982,12 @@ export default function HomePage() {
 
           <div className={styles.calendarGrid}>
             {cells.map((cell) => {
-              if (!cell.date) {
-                return <div key={cell.key} className={styles.calendarCellEmpty} />;
-              }
-
-              const tasksForDay = data.tasks
+              if (!cell.date) return <div key={cell.key} className={styles.calendarCellEmpty} />;
+              const tasksForDay = filteredCalendarTasks
                 .filter((task) => task.date === cell.date)
-                .filter((task) => calendarFilterUserId === "all" || task.assigneeId === calendarFilterUserId)
                 .sort((left, right) => getTaskSortKey(left).localeCompare(getTaskSortKey(right)));
               const isSelected = selectedDate === cell.date;
               const isToday = todayKey === cell.date;
-
               return (
                 <button
                   key={cell.key}
@@ -627,16 +999,14 @@ export default function HomePage() {
                     {isToday ? <span className={styles.todayBadge}>Dnes</span> : null}
                   </div>
                   {tasksForDay.length === 0 ? (
-                    <div className={styles.calendarDots}>
-                      {isToday ? <span className={styles.calendarTodayHint}>Dnes</span> : null}
-                    </div>
+                    <div className={styles.calendarDots}>{isToday ? <span className={styles.calendarTodayHint}>Dnes</span> : null}</div>
                   ) : (
                     <div className={styles.calendarMiniList}>
                       {tasksForDay.slice(0, 2).map((task) => {
                         const member = data.members.find((item) => item.id === task.assigneeId);
                         return (
                           <div key={task.id} className={styles.calendarMiniItem}>
-                            <span className={styles.calendarDot} style={{ backgroundColor: member?.color }} />
+                            <span className={`${styles.calendarDot} ${getPriorityClass(task.priority)}`} style={{ backgroundColor: member?.color }} />
                             <small>
                               {task.time ? `${task.time} ` : ""}
                               {task.title}
@@ -644,9 +1014,7 @@ export default function HomePage() {
                           </div>
                         );
                       })}
-                      {tasksForDay.length > 2 ? (
-                        <small className={styles.calendarMore}>+{tasksForDay.length - 2} dalsi</small>
-                      ) : null}
+                      {tasksForDay.length > 2 ? <small className={styles.calendarMore}>+{tasksForDay.length - 2} dalsi</small> : null}
                     </div>
                   )}
                 </button>
@@ -657,39 +1025,12 @@ export default function HomePage() {
           <div className={styles.calendarList}>
             <div className={styles.calendarSelectedHeader}>
               <strong>{formatDateLabel(selectedDate)}</strong>
-              <span>
-                {
-                  selectedDateTasks.filter(
-                    (task) => calendarFilterUserId === "all" || task.assigneeId === calendarFilterUserId
-                  ).length
-                }{" "}
-                ukolu
-              </span>
+              <span>{selectedDateTasks.length} ukolu</span>
             </div>
-            {selectedDateTasks.filter(
-              (task) => calendarFilterUserId === "all" || task.assigneeId === calendarFilterUserId
-            ).length === 0 ? (
+            {selectedDateTasks.length === 0 ? (
               <div className={styles.emptyState}>Na vybrany den zatim neni nic naplanovaneho.</div>
             ) : (
-              selectedDateTasks
-                .filter((task) => calendarFilterUserId === "all" || task.assigneeId === calendarFilterUserId)
-                .map((task) => {
-                const member = data.members.find((item) => item.id === task.assigneeId);
-                return (
-                  <div key={task.id} className={styles.calendarRow}>
-                    <div>
-                      <strong>{task.title}</strong>
-                      <p>
-                        {task.repeatLabel} · {formatTimeLabel(task.time)}
-                      </p>
-                    </div>
-                    <div className={styles.calendarMeta}>
-                      <span style={{ color: member?.color }}>{member?.name}</span>
-                      <span>{task.done ? "Splneno" : "Ceka"}</span>
-                    </div>
-                  </div>
-                );
-              })
+              selectedDateTasks.map((task) => renderTaskCard(task, { showActions: true }))
             )}
           </div>
         </article>
@@ -704,21 +1045,43 @@ export default function HomePage() {
           <div className={styles.panelHeader}>
             <div>
               <span className={styles.sectionTag}>Rodina</span>
-              <h2>Mesicni prehled</h2>
+              <h2>Body a zebricek</h2>
             </div>
           </div>
           <div className={styles.familyGrid}>
-            {data.members.map((member) => (
+            {leaderboard.map((member, index) => (
               <div key={member.id} className={styles.memberCard}>
                 <div className={styles.memberBadge} style={{ backgroundColor: member.color }}>
-                  {getInitials(member.name)}
+                  {member.avatar || getBadgeText(member.name)}
                 </div>
-                <strong>{member.name}</strong>
+                <strong>
+                  #{index + 1} {member.name}
+                </strong>
                 <span>@{member.username}</span>
-                <p>{getCompletedCount(member.id, data.tasks)} splnenych ukolu tento mesic</p>
+                <p>{member.points} bodu za splnene ukoly tento mesic</p>
                 <small>{member.canManage ? "muze pridavat ukoly" : "muze jen plnit svoje ukoly"}</small>
               </div>
             ))}
+          </div>
+          <div className={styles.historyList}>
+            {data.taskHistory.slice(0, 12).map((item) => {
+              const member = data.members.find((entry) => entry.id === item.assigneeId);
+              return (
+                <div key={item.id} className={styles.historyItem}>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{formatDateTimeLabel(item.completedAt)}</p>
+                  </div>
+                  <div className={styles.historyMeta}>
+                    {member ? renderMemberPill(member.id) : null}
+                    <span className={`${styles.priorityBadge} ${getPriorityClass(item.priority)}`}>
+                      {priorityLabels[item.priority || "medium"]}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+            {data.taskHistory.length === 0 ? <div className={styles.emptyState}>Historie se naplni po splneni prvnich ukolu.</div> : null}
           </div>
         </article>
       </section>
@@ -735,44 +1098,12 @@ export default function HomePage() {
               <h2>Spolecny seznam</h2>
             </div>
           </div>
-          {canManage ? (
-            <form className={styles.inlineForm} onSubmit={(event) => void addShoppingItem(event)}>
-              <input
-                value={shoppingTitle}
-                onChange={(event) => setShoppingTitle(event.target.value)}
-                placeholder="Treba testoviny"
-              />
-              <select value={shoppingAssigneeId} onChange={(event) => setShoppingAssigneeId(event.target.value)}>
-                {data.members.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name}
-                  </option>
-                ))}
-              </select>
-              <button className={styles.primaryButton} type="submit">
-                Pridat
-              </button>
-            </form>
-          ) : (
-            <div className={styles.permissionCard}>Daniel nema pravo pridavat nove nakupy.</div>
-          )}
+          {canManage ? renderShoppingForm() : <div className={styles.permissionCard}>Daniel nema pravo pridavat nove nakupy.</div>}
           <div className={styles.shoppingList}>
             {data.shoppingItems.length === 0 ? (
               <div className={styles.emptyState}>Nakupni seznam je zatim prazdny.</div>
             ) : (
-              data.shoppingItems.map((item) => {
-                const member = data.members.find((entry) => entry.id === item.assigneeId);
-                return (
-                  <button
-                    key={item.id}
-                    className={`${styles.shoppingItem} ${item.done ? styles.taskDone : ""}`}
-                    onClick={() => void toggleShoppingItem(item.id)}
-                  >
-                    <strong>{item.title}</strong>
-                    <span style={{ color: member?.color }}>{member?.name}</span>
-                  </button>
-                );
-              })
+              data.shoppingItems.map(renderShoppingCard)
             )}
           </div>
         </article>
@@ -790,24 +1121,98 @@ export default function HomePage() {
               <h2>{`Co ma ${activeUser?.name.toLowerCase()} na starost`}</h2>
             </div>
           </div>
-          {myTasks.length === 0 ? (
-            <div className={styles.emptyState}>Zatim nemas prirazeny zadny ukol.</div>
-          ) : (
-            <div className={styles.taskList}>{myTasks.map(renderTaskCard)}</div>
-          )}
+          {myTasks.length === 0 ? <div className={styles.emptyState}>Zatim nemas prirazeny zadny ukol.</div> : myTasks.map((task) => renderTaskCard(task, { showActions: true }))}
         </article>
       </section>
     );
   }
 
-  function renderReminders() {
-    return <section className={styles.singleSection}>{renderRemindersPanel()}</section>;
+  function renderNotesSection() {
+    return (
+      <section className={styles.singleSection}>
+        <article className={`${styles.panel} ${styles.panelFull}`}>
+          <div className={styles.panelHeader}>
+            <div>
+              <span className={styles.sectionTag}>Domov</span>
+              <h2>Poznamky pro domacnost</h2>
+            </div>
+          </div>
+          <form className={styles.formStack} onSubmit={(event) => void addHouseholdNote(event)}>
+            <textarea
+              className={styles.textarea}
+              value={noteBody}
+              onChange={(event) => setNoteBody(event.target.value)}
+              placeholder="Treba v lednici je vecere nebo v sobotu prijde navsteva"
+            />
+            <button className={styles.primaryButton} type="submit">
+              Pridat poznamku
+            </button>
+          </form>
+          <div className={styles.notesList}>
+            {data.householdNotes.map((note: HouseholdNote) => {
+              const member = data.members.find((entry) => entry.id === note.authorId);
+              return (
+                <div key={note.id} className={styles.noteCard}>
+                  <div className={styles.noteHeader}>
+                    {member ? renderMemberPill(member.id) : null}
+                    <span>{formatDateTimeLabel(note.createdAt)}</span>
+                  </div>
+                  <p>{note.body}</p>
+                </div>
+              );
+            })}
+            {data.householdNotes.length === 0 ? <div className={styles.emptyState}>Zatim tu nejsou zadne domaci poznamky.</div> : null}
+          </div>
+        </article>
+      </section>
+    );
+  }
+
+  function renderChat() {
+    return (
+      <section className={styles.singleSection}>
+        <article className={`${styles.panel} ${styles.panelFull}`}>
+          <div className={styles.panelHeader}>
+            <div>
+              <span className={styles.sectionTag}>Chat</span>
+              <h2>Rodinna komunikace</h2>
+            </div>
+          </div>
+          <form className={styles.chatComposer} onSubmit={(event) => void sendChatMessage(event)}>
+            <input
+              value={chatBody}
+              onChange={(event) => setChatBody(event.target.value)}
+              placeholder="Napis kratkou zpravu rodine"
+            />
+            <button className={styles.primaryButton} type="submit">
+              Odeslat
+            </button>
+          </form>
+          <div className={styles.chatList}>
+            {data.chatMessages.map((message: ChatMessage) => {
+              const member = data.members.find((entry) => entry.id === message.authorId);
+              const mine = activeUser?.id === message.authorId;
+              return (
+                <div key={message.id} className={`${styles.chatBubble} ${mine ? styles.chatBubbleMine : ""}`}>
+                  <div className={styles.noteHeader}>
+                    {member ? renderMemberPill(member.id) : null}
+                    <span>{formatDateTimeLabel(message.createdAt)}</span>
+                  </div>
+                  <p>{message.body}</p>
+                </div>
+              );
+            })}
+            {data.chatMessages.length === 0 ? <div className={styles.emptyState}>Chat je zatim prazdny.</div> : null}
+          </div>
+        </article>
+      </section>
+    );
   }
 
   function renderAdmin() {
-    if (!canManage) {
-      return null;
-    }
+    if (!canManage) return null;
+
+    const selectedMember = data.members.find((member) => member.id === adminUserId);
 
     return (
       <section className={styles.singleSection}>
@@ -815,12 +1220,24 @@ export default function HomePage() {
           <div className={styles.panelHeader}>
             <div>
               <span className={styles.sectionTag}>Admin</span>
-              <h2>Zmena hesel</h2>
+              <h2>Hesla a profily</h2>
             </div>
           </div>
-          <form className={styles.formStack} onSubmit={(event) => void resetPassword(event)}>
-            <div className={styles.twoCols}>
-              <select value={adminUserId} onChange={(event) => setAdminUserId(event.target.value)}>
+          <div className={styles.adminGrid}>
+            <form className={styles.formStack} onSubmit={(event) => void resetPassword(event)}>
+              <strong>Zmena hesla</strong>
+              <select
+                value={adminUserId}
+                onChange={(event) => {
+                  const nextId = event.target.value;
+                  setAdminUserId(nextId);
+                  const member = data.members.find((item) => item.id === nextId);
+                  if (member) {
+                    setMemberColor(member.color);
+                    setMemberAvatar(member.avatar || getBadgeText(member.name));
+                  }
+                }}
+              >
                 {data.members.map((member) => (
                   <option key={member.id} value={member.id}>
                     {member.name}
@@ -833,13 +1250,32 @@ export default function HomePage() {
                 onChange={(event) => setNewPassword(event.target.value)}
                 placeholder="Nove heslo"
               />
-            </div>
-            <div className={styles.inlineNote}>Po zmene hesla se dotycny uzivatel odhlasi ze vsech zarizeni.</div>
-            <button className={styles.primaryButton} type="submit">
-              Ulozit nove heslo
-            </button>
-            {adminMessage ? <p className={styles.statusText}>{adminMessage}</p> : null}
-          </form>
+              <button className={styles.primaryButton} type="submit">
+                Ulozit nove heslo
+              </button>
+            </form>
+
+            <form className={styles.formStack} onSubmit={(event) => void saveMemberProfile(event)}>
+              <strong>Barva a avatar</strong>
+              <div className={styles.profilePreview}>
+                <div className={styles.memberBadgeLarge} style={{ backgroundColor: memberColor }}>
+                  {memberAvatar || selectedMember?.avatar || "NA"}
+                </div>
+                <div>
+                  <strong>{selectedMember?.name}</strong>
+                  <p>Uprav si barvu a zkratku profilu.</p>
+                </div>
+              </div>
+              <div className={styles.twoCols}>
+                <input type="color" value={memberColor} onChange={(event) => setMemberColor(event.target.value)} />
+                <input value={memberAvatar} maxLength={2} onChange={(event) => setMemberAvatar(event.target.value.toUpperCase())} />
+              </div>
+              <button className={styles.primaryButton} type="submit">
+                Ulozit profil
+              </button>
+            </form>
+          </div>
+          {adminMessage ? <p className={styles.statusText}>{adminMessage}</p> : null}
         </article>
       </section>
     );
@@ -900,7 +1336,7 @@ export default function HomePage() {
           <div className={styles.brandBlock}>
             <span className={styles.kicker}>Rodinny organizer</span>
             <h1>NaTahu</h1>
-            <p>Hotove ukoly se pocitaji po mesicich, opakovane se sami planuji dal a admin umi resetovat hesla.</p>
+            <p>Ukoly, nakupy, chat, domaci poznamky a pripominky na jednom miste.</p>
           </div>
 
           <nav className={styles.navList}>
@@ -920,11 +1356,11 @@ export default function HomePage() {
             <div className={styles.cardLabel}>Prihlaseni</div>
             <div className={styles.loggedInBox}>
               <div className={styles.memberBadge} style={{ backgroundColor: activeUser.color }}>
-                {getInitials(activeUser.name)}
+                {activeUser.avatar || getBadgeText(activeUser.name)}
               </div>
               <div>
                 <strong>{activeUser.name}</strong>
-                <p>{activeUser.canManage ? "Muzes pridavat i spravovat ukoly." : "Muzes plnit jen svoje ukoly."}</p>
+                <p>{activeUser.canManage ? "Muzes spravovat cely domov." : "Muzes plnit svoje ukoly a komunikovat."}</p>
               </div>
               <button className={styles.secondaryButton} onClick={() => void handleLogout()}>
                 Odhlasit
@@ -942,6 +1378,9 @@ export default function HomePage() {
             <div className={styles.topbarMeta}>
               <span>{saving ? "Ukladam..." : "Ulozeno"}</span>
               <span>{formatDateLabel(todayKey)}</span>
+              <button className={styles.secondaryButton} onClick={() => void handleLogout()}>
+                Odhlasit
+              </button>
             </div>
           </header>
 
@@ -962,7 +1401,9 @@ export default function HomePage() {
           {activeSection === "family" ? renderFamily() : null}
           {activeSection === "shopping" ? renderShopping() : null}
           {activeSection === "mine" ? renderMine() : null}
-          {activeSection === "reminders" ? renderReminders() : null}
+          {activeSection === "reminders" ? <section className={styles.singleSection}>{renderRemindersPanel()}</section> : null}
+          {activeSection === "notes" ? renderNotesSection() : null}
+          {activeSection === "chat" ? renderChat() : null}
           {activeSection === "admin" ? renderAdmin() : null}
         </section>
       </div>

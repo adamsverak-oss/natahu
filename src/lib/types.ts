@@ -3,5 +3,6 @@ export type SessionUser = {
   name: string;
   username: string;
   color: string;
+  avatar?: string;
   canManage: boolean;
 };

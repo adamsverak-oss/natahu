@@ -16,7 +16,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { title, assigneeId, date, time, repeatType, repeatEvery } = (await request.json()) as {
+  const { title, notes, assigneeId, date, time, priority, repeatType, repeatEvery } = (await request.json()) as {
+    notes?: string;
+    priority?: "low" | "medium" | "high";
     repeatType?: "none" | "daily" | "weekly" | "monthly";
     repeatEvery?: number;
     title?: string;
@@ -34,12 +36,25 @@ export async function POST(request: Request) {
   const repeatLabel = getRepeatLabel(resolvedRepeatType, resolvedRepeatEvery);
 
   await sql`
-    insert into tasks (title, assignee_id, task_date, task_time, repeat_type, repeat_every, repeat_label, done)
+    insert into tasks (
+      title,
+      notes,
+      assignee_id,
+      task_date,
+      task_time,
+      priority,
+      repeat_type,
+      repeat_every,
+      repeat_label,
+      done
+    )
     values (
       ${title.trim()},
+      ${notes?.trim() || null},
       ${assigneeId},
       ${date},
       ${time || null},
+      ${priority ?? "medium"},
       ${resolvedRepeatType},
       ${resolvedRepeatEvery},
       ${repeatLabel},

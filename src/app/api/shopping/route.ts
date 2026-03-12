@@ -15,9 +15,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { title, assigneeId } = (await request.json()) as {
+  const { title, notes, assigneeId, repeatType, repeatEvery } = (await request.json()) as {
     title?: string;
+    notes?: string;
     assigneeId?: string;
+    repeatType?: "none" | "daily" | "weekly" | "monthly";
+    repeatEvery?: number;
   };
 
   if (!title || !assigneeId) {
@@ -25,8 +28,15 @@ export async function POST(request: Request) {
   }
 
   await sql`
-    insert into shopping_items (title, assignee_id, done)
-    values (${title.trim()}, ${assigneeId}, false)
+    insert into shopping_items (title, notes, assignee_id, done, repeat_type, repeat_every)
+    values (
+      ${title.trim()},
+      ${notes?.trim() || null},
+      ${assigneeId},
+      false,
+      ${repeatType ?? "none"},
+      ${Math.max(1, repeatEvery ?? 1)}
+    )
   `;
 
   return NextResponse.json({ ok: true });

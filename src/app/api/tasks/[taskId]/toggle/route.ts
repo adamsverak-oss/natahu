@@ -20,8 +20,10 @@ export async function POST(
     assigneeId: string;
     done: boolean;
     title: string;
+    notes: string | null;
     date: string;
     time: string | null;
+    priority: "low" | "medium" | "high";
     repeatType: "none" | "daily" | "weekly" | "monthly";
     repeatEvery: number;
     repeatLabel: string;
@@ -30,8 +32,10 @@ export async function POST(
       assignee_id as "assigneeId",
       done,
       title,
+      notes,
       task_date::text as date,
       task_time::text as time,
+      priority,
       repeat_type as "repeatType",
       repeat_every as "repeatEvery",
       repeat_label as "repeatLabel"
@@ -58,6 +62,20 @@ export async function POST(
     where id = ${taskId}
   `;
 
+  if (nextDone) {
+    await sql`
+      insert into task_history (task_id, title, notes, assignee_id, priority, completed_at)
+      values (
+        ${taskId},
+        ${task.title},
+        ${task.notes},
+        ${task.assigneeId},
+        ${task.priority},
+        ${new Date().toISOString()}
+      )
+    `;
+  }
+
   if (nextDone && task.repeatType !== "none") {
     const nextDate = getNextOccurrence(task.date, task.repeatType, task.repeatEvery);
 
@@ -78,9 +96,11 @@ export async function POST(
         await sql`
           insert into tasks (
             title,
+            notes,
             assignee_id,
             task_date,
             task_time,
+            priority,
             repeat_type,
             repeat_every,
             repeat_label,
@@ -88,9 +108,11 @@ export async function POST(
           )
           values (
             ${task.title},
+            ${task.notes},
             ${task.assigneeId},
             ${nextDate},
             ${task.time},
+            ${task.priority},
             ${task.repeatType},
             ${task.repeatEvery},
             ${task.repeatLabel},

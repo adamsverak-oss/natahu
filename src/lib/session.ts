@@ -21,6 +21,7 @@ export async function getCurrentUser() {
       users.name,
       users.username,
       users.color,
+      users.avatar,
       users.can_manage as "canManage"
     from sessions
     join users on users.id = sessions.user_id

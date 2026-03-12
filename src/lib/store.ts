@@ -1,12 +1,21 @@
 import { getSql } from "@/lib/db";
-import type { AppData, ShoppingItem, Task } from "@/lib/app-data";
+import type {
+  AppData,
+  ChatMessage,
+  HouseholdNote,
+  ShoppingItem,
+  Task,
+  TaskHistoryItem,
+} from "@/lib/app-data";
 
 type DbTask = {
   id: string;
   title: string;
+  notes: string | null;
   assigneeId: string;
   date: string;
   time: string | null;
+  priority: "low" | "medium" | "high";
   repeatType: "none" | "daily" | "weekly" | "monthly";
   repeatEvery: number;
   repeatLabel: string;
@@ -17,8 +26,34 @@ type DbTask = {
 type DbShoppingItem = {
   id: string;
   title: string;
+  notes: string | null;
   assigneeId: string;
   done: boolean;
+  repeatType: "none" | "daily" | "weekly" | "monthly";
+  repeatEvery: number;
+};
+
+type DbHistoryItem = {
+  id: string;
+  title: string;
+  notes: string | null;
+  assigneeId: string;
+  completedAt: string;
+  priority: "low" | "medium" | "high";
+};
+
+type DbHouseholdNote = {
+  id: string;
+  body: string;
+  authorId: string;
+  createdAt: string;
+};
+
+type DbChatMessage = {
+  id: string;
+  body: string;
+  authorId: string;
+  createdAt: string;
 };
 
 function currentMonthStartIso() {
@@ -29,7 +64,9 @@ function currentMonthStartIso() {
 function mapTask(task: DbTask): Task {
   return {
     ...task,
+    notes: task.notes ?? undefined,
     time: task.time ?? undefined,
+    priority: task.priority,
     repeatType: task.repeatType,
     repeatEvery: task.repeatEvery,
     completedAt: task.completedAt,
@@ -37,6 +74,27 @@ function mapTask(task: DbTask): Task {
 }
 
 function mapShoppingItem(item: DbShoppingItem): ShoppingItem {
+  return {
+    ...item,
+    notes: item.notes ?? undefined,
+    repeatType: item.repeatType,
+    repeatEvery: item.repeatEvery,
+  };
+}
+
+function mapHistoryItem(item: DbHistoryItem): TaskHistoryItem {
+  return {
+    ...item,
+    notes: item.notes ?? undefined,
+    priority: item.priority,
+  };
+}
+
+function mapHouseholdNote(item: DbHouseholdNote): HouseholdNote {
+  return item;
+}
+
+function mapChatMessage(item: DbChatMessage): ChatMessage {
   return item;
 }
 
@@ -61,6 +119,7 @@ export async function readAppData(): Promise<AppData> {
       username,
       '' as password,
       color,
+      avatar,
       can_manage as "canManage"
     from users
     order by created_at asc
@@ -70,9 +129,11 @@ export async function readAppData(): Promise<AppData> {
     select
       id,
       title,
+      notes,
       assignee_id as "assigneeId",
       task_date::text as date,
       task_time::text as time,
+      priority,
       repeat_type as "repeatType",
       repeat_every as "repeatEvery",
       repeat_label as "repeatLabel",
@@ -86,15 +147,56 @@ export async function readAppData(): Promise<AppData> {
     select
       id,
       title,
+      notes,
       assignee_id as "assigneeId",
-      done
+      done,
+      repeat_type as "repeatType",
+      repeat_every as "repeatEvery"
     from shopping_items
     order by done asc, created_at desc
+  `;
+
+  const taskHistory = await sql<DbHistoryItem[]>`
+    select
+      id,
+      title,
+      notes,
+      assignee_id as "assigneeId",
+      completed_at::text as "completedAt",
+      priority
+    from task_history
+    order by completed_at desc
+    limit 200
+  `;
+
+  const householdNotes = await sql<DbHouseholdNote[]>`
+    select
+      id,
+      body,
+      author_id as "authorId",
+      created_at::text as "createdAt"
+    from household_notes
+    order by created_at desc
+    limit 50
+  `;
+
+  const chatMessages = await sql<DbChatMessage[]>`
+    select
+      id,
+      body,
+      author_id as "authorId",
+      created_at::text as "createdAt"
+    from chat_messages
+    order by created_at desc
+    limit 100
   `;
 
   return {
     members,
     tasks: tasks.map(mapTask),
     shoppingItems: shoppingItems.map(mapShoppingItem),
+    taskHistory: taskHistory.map(mapHistoryItem),
+    householdNotes: householdNotes.map(mapHouseholdNote),
+    chatMessages: chatMessages.reverse().map(mapChatMessage),
   };
 }
